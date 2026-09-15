@@ -4,13 +4,12 @@ export default {
   plugins: [
     "@semantic-release/commit-analyzer",
     "@semantic-release/release-notes-generator",
-    // First version needs to be manually published
-    // [
-    //   "@semantic-release/npm",
-    //   {
-    //     npmPublish: true,
-    //   },
-    // ],
+    [
+      "@semantic-release/npm",
+      {
+        npmPublish: true,
+      },
+    ],
     [
       "@semantic-release/git",
       {
