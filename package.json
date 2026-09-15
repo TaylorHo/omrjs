@@ -1,0 +1,69 @@
+{
+  "name": "omrjs",
+  "version": "1.0.0",
+  "description": "Answer sheet parsing and data extraction using Optical Mark Recognition (OMR) in pure JavaScript",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./worker": {
+      "types": "./dist/worker/worker.d.ts",
+      "import": "./dist/worker/worker.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": [
+    "./dist/worker/worker.js"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "build": "tsc -b",
+    "prepublishOnly": "npm run build",
+    "example": "npm run build && vite example",
+    "format": "biome check --write",
+    "release:dry-run": "semantic-release --dry-run",
+    "release": "semantic-release"
+  },
+  "keywords": [
+    "omr",
+    "optical-mark-recognition",
+    "answer-sheet",
+    "scantron",
+    "bubble-sheet",
+    "form-recognition",
+    "image-processing"
+  ],
+  "author": "Taylor Hoffmann <taylor@hoffmann.io>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TaylorHo/omrjs.git"
+  },
+  "bugs": {
+    "url": "https://github.com/TaylorHo/omrjs/issues"
+  },
+  "homepage": "https://github.com/TaylorHo/omrjs#readme",
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.13",
+    "@semantic-release/commit-analyzer": "^13.0.1",
+    "@semantic-release/git": "^11.0.1",
+    "@semantic-release/github": "^12.0.9",
+    "@semantic-release/npm": "^13.1.5",
+    "@semantic-release/release-notes-generator": "^14.1.1",
+    "semantic-release": "^25.0.9",
+    "typescript": "^7.0.2",
+    "vite": "^6.3.5"
+  }
+}

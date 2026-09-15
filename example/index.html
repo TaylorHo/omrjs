@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>omrjs example</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+
+<body>
+  <header>
+    <h1>omrjs</h1>
+    <p>Browser demo for Object Mark Recognition</p>
+  </header>
+
+  <main>
+    <section class="panel controls">
+      <div class="controls-scroll">
+        <h2 class="section-title">Sheet layout</h2>
+        <p class="hint">
+          Define corner markers and answer blocks relative to
+          <code>cornerSize</code> units.
+        </p>
+
+        <label class="field">
+          <span>Corner pattern</span>
+          <select id="corner-pattern">
+            <option value="bullseye">Bullseye (default)</option>
+            <option value="image">Custom image</option>
+          </select>
+        </label>
+
+        <div id="custom-marker-panel" class="custom-marker-panel" hidden>
+          <div class="custom-marker-actions">
+            <button id="upload-marker-btn" type="button" class="small">Upload marker</button>
+            <button id="clear-marker-btn" type="button" class="small" hidden>Clear</button>
+          </div>
+          <input id="marker-file-input" type="file" accept="image/*" hidden />
+          <div id="marker-preview-wrap" class="marker-preview-wrap" hidden>
+            <canvas id="marker-preview" width="64" height="64"></canvas>
+            <p id="marker-preview-meta" class="hint"></p>
+          </div>
+          <p class="hint">
+            Use the same marker image printed at each sheet corner. The built-in
+            bullseye does not require an image.
+          </p>
+        </div>
+
+        <label class="field">
+          <span>Corner size</span>
+          <input id="corner-size" type="number" step="any" min="1" value="100" />
+        </label>
+
+        <div id="blocks-list"></div>
+
+        <button id="add-block-btn" type="button" class="small wide">Add answer block</button>
+
+        <h2 class="section-title">Simple config</h2>
+
+        <label class="field range-field">
+          <span>NCC threshold <output id="ncc-value">0.5</output></span>
+          <input id="ncc-threshold" type="range" min="0.2" max="0.9" step="0.05" value="0.5" />
+        </label>
+
+        <label class="field range-field">
+          <span>Fill threshold <output id="fill-value">0.5</output></span>
+          <input id="fill-threshold" type="range" min="0.1" max="0.9" step="0.05" value="0.5" />
+        </label>
+
+        <label class="field">
+          <span>Output format</span>
+          <select id="output-format">
+            <option value="letter">Letters (a, b, c…)</option>
+            <option value="number-1">Numbers (1, 2, 3…)</option>
+            <option value="number-0">Numbers (0, 1, 2…)</option>
+          </select>
+        </label>
+
+        <label class="field checkbox">
+          <input id="debug-mode" type="checkbox" checked />
+          <span>Debug output</span>
+        </label>
+
+        <label class="field">
+          <span>Orientation</span>
+          <select id="orientation">
+            <option value="portrait">Portrait — vertical A4 (default)</option>
+            <option value="landscape">Landscape — horizontal</option>
+            <option value="none">None — no auto-rotation</option>
+          </select>
+        </label>
+
+        <details class="advanced" open>
+          <summary>Advanced config</summary>
+
+          <label class="field range-field">
+            <span>Exposure gamma <output id="gamma-value">2.2</output></span>
+            <input id="exposure-gamma" type="range" min="0.5" max="3" step="0.1" value="2.2" />
+          </label>
+
+          <label class="field">
+            <span>Grayscale method</span>
+            <select id="grayscale">
+              <option value="luminance">Luminance</option>
+              <option value="average">Average</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Detection scales</span>
+            <input id="detection-scales" type="text" value="0.5, 1, 1.5, 2" spellcheck="false" />
+            <small class="field-hint">Comma-separated values</small>
+          </label>
+
+          <label class="field range-field">
+            <span>Corner search margin <output id="margin-value">0.2</output></span>
+            <input id="corner-search-margin" type="range" min="0.05" max="0.5" step="0.05" value="0.2" />
+          </label>
+
+          <label class="field checkbox">
+            <input id="use-worker" type="checkbox" checked />
+            <span>Run in background worker (keeps UI responsive)</span>
+          </label>
+        </details>
+      </div>
+
+      <div class="controls-actions">
+        <button id="process-btn" type="button" class="primary" disabled>
+          Process sheet
+        </button>
+
+        <p id="status" class="status" aria-live="polite"></p>
+
+        <div class="config-export">
+          <div class="config-export-bar">
+            <details class="config-export-details" id="config-export-details">
+              <summary>Configuration</summary>
+            </details>
+            <div class="config-export-actions">
+              <select id="config-format" class="small" aria-label="Configuration format">
+                <option value="js" selected>JS object</option>
+                <option value="json">JSON</option>
+              </select>
+              <button id="copy-config-btn" type="button" class="small">Copy</button>
+            </div>
+          </div>
+          <div class="config-export-content">
+            <p id="config-format-hint" class="config-format-hint">
+              JavaScript object literal — paste directly into your code as data and config values.
+            </p>
+            <pre id="config-preview">Adjust sheet layout and parameters, then process or copy.</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="output-row">
+      <section class="panel preview">
+        <div class="preview-header">
+          <h2>Preview</h2>
+          <div class="preview-actions">
+            <button id="upload-preview-btn" type="button" class="small">Upload image</button>
+            <button id="sample-preview-btn" type="button" class="small">Generate sample</button>
+          </div>
+        </div>
+
+        <input id="file-input" type="file" accept="image/*" hidden />
+
+        <div class="preview-body">
+          <div id="preview-empty" class="preview-empty">
+            <p>No image loaded</p>
+            <p class="hint">
+              Upload your own scan or generate a sample using the buttons above.
+            </p>
+          </div>
+
+          <canvas id="preview" width="600" height="800" hidden></canvas>
+        </div>
+      </section>
+
+      <section class="panel results">
+        <div class="results-header">
+          <h2>Results</h2>
+          <button id="copy-results-btn" type="button" class="small" disabled>Copy</button>
+        </div>
+
+        <div id="results-body" class="results-body">
+          <div id="results-loader" class="results-loader" hidden aria-live="polite">
+            <div class="spinner" aria-hidden="true"></div>
+            <p id="results-loader-text">Processing…</p>
+          </div>
+
+          <div id="results-notice" class="results-notice" hidden></div>
+
+          <div class="debug-grid" id="debug-grid-panel" hidden>
+            <h3 class="debug-grid-title">Debug Grid</h3>
+            <p class="hint">
+              Warped sheet with answer-cell rectangles. Colored borders show each
+              block; tinted cells exceed the fill threshold.
+            </p>
+            <canvas id="debug-canvas"></canvas>
+          </div>
+
+          <pre id="results">Load an image and click Process to see results.</pre>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script type="module" src="/main.js"></script>
+</body>
+
+</html>

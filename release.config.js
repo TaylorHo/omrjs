@@ -1,0 +1,25 @@
+/** @type {import('semantic-release').GlobalConfig} */
+export default {
+  branches: ["release"],
+  plugins: [
+    "@semantic-release/commit-analyzer",
+    "@semantic-release/release-notes-generator",
+    // First version needs to be manually published
+    // [
+    //   "@semantic-release/npm",
+    //   {
+    //     npmPublish: true,
+    //   },
+    // ],
+    [
+      "@semantic-release/git",
+      {
+        assets: ["package.json", "package-lock.json"],
+        message:
+          // biome-ignore lint/suspicious/noTemplateCurlyInString: Template literals work differently here
+          "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}",
+      },
+    ],
+    "@semantic-release/github",
+  ],
+};
