@@ -11,7 +11,7 @@
 <body>
   <header>
     <h1>omrjs</h1>
-    <p>Browser demo for Object Mark Recognition</p>
+    <p>Page detection and perspective correction</p>
   </header>
 
   <main>
@@ -20,7 +20,7 @@
         <h2 class="section-title">Sheet layout</h2>
         <p class="hint">
           Define corner markers and answer blocks relative to
-          <code>cornerSize</code> units.
+          <code>cornerSize</code> units. Block positions start at the top-left marker center in the rectified image.
         </p>
 
         <label class="field">
@@ -50,84 +50,55 @@
         <label class="field">
           <span>Corner size</span>
           <input id="corner-size" type="number" step="any" min="1" value="100" />
+          <small class="field-hint">Full reference-image width in layout units. Keep this value and your blocks unchanged when resizing or cropping the same sheet.</small>
         </label>
 
         <div id="blocks-list"></div>
 
         <button id="add-block-btn" type="button" class="small wide">Add answer block</button>
 
-        <h2 class="section-title">Simple config</h2>
+        <h2 class="section-title">Rectification</h2>
 
         <label class="field range-field">
           <span>NCC threshold <output id="ncc-value">0.5</output></span>
           <input id="ncc-threshold" type="range" min="0.2" max="0.9" step="0.05" value="0.5" />
         </label>
 
+        <label class="field">
+          <span>Page background color</span>
+          <input id="page-color" type="color" value="#ffffff" />
+        </label>
         <label class="field range-field">
-          <span>Fill threshold <output id="fill-value">0.5</output></span>
-          <input id="fill-threshold" type="range" min="0.1" max="0.9" step="0.05" value="0.5" />
+          <span>Color tolerance <output id="tolerance-value">0.15</output></span>
+          <input id="color-tolerance" type="range" min="0" max="0.6" step="0.01" value="0.15" />
+          <small class="field-hint">RGB distance: 0 requires an exact match; higher values accept more color variation.</small>
         </label>
-
         <label class="field">
-          <span>Output format</span>
-          <select id="output-format">
-            <option value="letter">Letters (a, b, c…)</option>
-            <option value="number-1">Numbers (1, 2, 3…)</option>
-            <option value="number-0">Numbers (0, 1, 2…)</option>
-          </select>
+          <span>Marker-frame aspect ratio (width / height)</span>
+          <input id="aspect-ratio" type="number" min="0.01" step="any" value="0.75" required />
+          <small class="field-hint">Measure between marker centers, not page edges. 0.75 is the sample's ratio.</small>
         </label>
-
+        <label class="field">
+          <span>Clockwise rotation</span>
+          <select id="rotation">
+            <option value="0">0°</option><option value="90">90°</option>
+            <option value="180">180°</option><option value="270">270°</option>
+          </select>
+          <small class="field-hint">Choose manually until printed-grid orientation detection is implemented.</small>
+        </label>
+        <label class="field">
+          <span>Sample cell shape</span>
+          <select id="sample-shape"><option value="circle">Circles</option><option value="rectangle">Rectangles</option></select>
+        </label>
         <label class="field checkbox">
-          <input id="debug-mode" type="checkbox" checked />
-          <span>Debug output</span>
+          <input id="use-worker" type="checkbox" checked />
+          <span>Run in background worker</span>
         </label>
-
-        <label class="field">
-          <span>Orientation</span>
-          <select id="orientation">
-            <option value="portrait">Portrait — vertical A4 (default)</option>
-            <option value="landscape">Landscape — horizontal</option>
-            <option value="none">None — no auto-rotation</option>
-          </select>
-        </label>
-
-        <details class="advanced" open>
-          <summary>Advanced config</summary>
-
-          <label class="field range-field">
-            <span>Exposure gamma <output id="gamma-value">2.2</output></span>
-            <input id="exposure-gamma" type="range" min="0.5" max="3" step="0.1" value="2.2" />
-          </label>
-
-          <label class="field">
-            <span>Grayscale method</span>
-            <select id="grayscale">
-              <option value="luminance">Luminance</option>
-              <option value="average">Average</option>
-            </select>
-          </label>
-
-          <label class="field">
-            <span>Detection scales</span>
-            <input id="detection-scales" type="text" value="0.5, 1, 1.5, 2" spellcheck="false" />
-            <small class="field-hint">Comma-separated values</small>
-          </label>
-
-          <label class="field range-field">
-            <span>Corner search margin <output id="margin-value">0.2</output></span>
-            <input id="corner-search-margin" type="range" min="0.05" max="0.5" step="0.05" value="0.2" />
-          </label>
-
-          <label class="field checkbox">
-            <input id="use-worker" type="checkbox" checked />
-            <span>Run in background worker (keeps UI responsive)</span>
-          </label>
-        </details>
       </div>
 
       <div class="controls-actions">
         <button id="process-btn" type="button" class="primary" disabled>
-          Process sheet
+          Rectify sheet
         </button>
 
         <p id="status" class="status" aria-live="polite"></p>
@@ -181,7 +152,7 @@
 
       <section class="panel results">
         <div class="results-header">
-          <h2>Results</h2>
+          <h2>Rectification</h2>
           <button id="copy-results-btn" type="button" class="small" disabled>Copy</button>
         </div>
 
@@ -194,15 +165,19 @@
           <div id="results-notice" class="results-notice" hidden></div>
 
           <div class="debug-grid" id="debug-grid-panel" hidden>
-            <h3 class="debug-grid-title">Debug Grid</h3>
-            <p class="hint">
-              Warped sheet with answer-cell rectangles. Colored borders show each
-              block; tinted cells exceed the fill threshold.
-            </p>
+            <label class="field">
+              <span>Inspect stage</span>
+              <select id="inspection-stage">
+                <option value="page">Page crop and marker matches</option>
+                <option value="rectified">Rectified image</option>
+                <option value="grid" selected>Configured grid overlay</option>
+              </select>
+            </label>
+            <p id="stage-hint" class="hint"></p>
             <canvas id="debug-canvas"></canvas>
           </div>
 
-          <pre id="results">Load an image and click Process to see results.</pre>
+          <pre id="results">Load an image and click Rectify sheet to inspect its geometry.</pre>
         </div>
       </section>
     </div>

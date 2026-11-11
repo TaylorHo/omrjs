@@ -639,18 +639,38 @@ code {
 
   main {
     grid-template-columns: 1fr;
-    grid-template-rows: minmax(16rem, 45vh) minmax(20rem, 55vh);
+    grid-template-rows: auto auto;
     overflow: visible;
   }
 
   .output-row {
     grid-template-columns: 1fr;
-    grid-template-rows: 1fr 1fr;
-    height: 100%;
+    grid-template-rows: auto auto;
+    height: auto;
     min-height: 0;
+    overflow: visible;
   }
 
   .controls {
-    max-height: none;
+    max-height: 65vh;
   }
+
+  .preview-body,
+  .results-body {
+    overflow: visible;
+  }
+
+  #preview,
+  #debug-canvas {
+    max-height: 70vh;
+    object-fit: contain;
+  }
+}
+
+.results-notice {
+  white-space: pre-line;
+}
+input[type="color"] {
+  width: 100%;
+  min-height: 2.5rem;
 }

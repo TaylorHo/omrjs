@@ -12,14 +12,14 @@ export type Data = {
   cornerPattern?: "bullseye" | ImageMarker;
 
   /// Used to define the scale of values like width, height, gaps, startX, startY.
-  /// Example: if cornerSize is 100, and alternatives[n].width = 100, the alternative width equals the corner marker width.
+  /// Full reference-image width, including its margins. All layout distances share these units.
   cornerSize: number;
 
   /// Definition of blocks of answers (a set of rows and columns of answers to be parsed).
   answersBlocks: {
-    /// Starting position of the block in the document, in the X axis.
+    /// First cell's left edge, measured from the rectified top-left marker center.
     startX: number;
-    /// Starting position of the block in the document, in the Y axis.
+    /// First cell's top edge, measured from the rectified top-left marker center.
     startY: number;
     /// Number of rows of answers in the block.
     rows: number;

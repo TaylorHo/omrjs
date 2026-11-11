@@ -1,5 +1,14 @@
 /** Simple config — covers the most common tuning needs. */
 export type ProcessConfig = {
+  /** Page color and normalized RGB distance tolerance (0–1). */
+  page?: {
+    backgroundColor?: [number, number, number];
+    colorTolerance?: number;
+  };
+  /** Width / height between marker centers. Required by rectify(). */
+  aspectRatio?: number;
+  /** Clockwise rotation for rectification; automatic grid orientation comes later. */
+  rotation?: 0 | 90 | 180 | 270;
   /** 0–1 correlation score to accept a corner match. Default: 0.5 */
   nccThreshold?: number;
   /** 0–1 ink fill ratio to mark a cell as checked. Default: 0.5 */
@@ -25,9 +34,9 @@ export type AdvancedConfig = ProcessConfig & {
     grayscale?: "luminance" | "average";
     /** Gamma value for exposure brightening. Default: 2.2 */
     exposureGamma?: number;
-    /** Template scales tried during corner search. Default: [0.5, 1, 1.5, 2] */
+    /** @deprecated Ignored by component-based marker detection. */
     detectionScales?: number[];
-    /** Search window as a fraction of image size when locating corners 2–4. Default: 0.2 */
+    /** @deprecated Ignored; markers are searched throughout the page. */
     cornerSearchMargin?: number;
   };
   worker?: {
@@ -39,6 +48,9 @@ export type AdvancedConfig = ProcessConfig & {
 };
 
 export type ResolvedConfig = {
+  page: { backgroundColor: [number, number, number]; colorTolerance: number };
+  aspectRatio: number | null;
+  rotation: 0 | 90 | 180 | 270;
   nccThreshold: number;
   fillThreshold: number;
   outputFormat: { type: "letter" } | { type: "number"; startAt: 0 | 1 };
@@ -52,6 +64,9 @@ export type ResolvedConfig = {
 };
 
 export const DEFAULT_CONFIG: ResolvedConfig = {
+  page: { backgroundColor: [255, 255, 255], colorTolerance: 0.15 },
+  aspectRatio: null,
+  rotation: 0,
   nccThreshold: 0.5,
   fillThreshold: 0.5,
   outputFormat: { type: "letter" },
@@ -70,6 +85,16 @@ export function resolveConfig(
   const advanced = config as AdvancedConfig | undefined;
   const outputFormat = config?.outputFormat ?? DEFAULT_CONFIG.outputFormat;
   const resolved: ResolvedConfig = {
+    page: {
+      backgroundColor: [
+        ...(config?.page?.backgroundColor ??
+          DEFAULT_CONFIG.page.backgroundColor),
+      ],
+      colorTolerance:
+        config?.page?.colorTolerance ?? DEFAULT_CONFIG.page.colorTolerance,
+    },
+    aspectRatio: config?.aspectRatio ?? null,
+    rotation: config?.rotation ?? 0,
     nccThreshold: config?.nccThreshold ?? DEFAULT_CONFIG.nccThreshold,
     fillThreshold: config?.fillThreshold ?? DEFAULT_CONFIG.fillThreshold,
     outputFormat:
@@ -90,5 +115,29 @@ export function resolveConfig(
       ? { enabled: true, url: advanced.worker.url }
       : { enabled: false },
   };
+  if (
+    resolved.page.backgroundColor.length !== 3 ||
+    resolved.page.backgroundColor.some(
+      (v) => !Number.isFinite(v) || v < 0 || v > 255,
+    )
+  ) {
+    throw new Error(
+      "Page backgroundColor must contain three RGB values from 0 to 255",
+    );
+  }
+  for (const [name, value] of [
+    ["Page colorTolerance", resolved.page.colorTolerance],
+    ["NCC threshold", resolved.nccThreshold],
+  ] as const) {
+    if (!Number.isFinite(value) || value < 0 || value > 1)
+      throw new Error(`${name} must be between 0 and 1`);
+  }
+  if (
+    resolved.aspectRatio !== null &&
+    (!Number.isFinite(resolved.aspectRatio) || resolved.aspectRatio <= 0)
+  )
+    throw new Error("aspectRatio must be positive and finite");
+  if (![0, 90, 180, 270].includes(resolved.rotation))
+    throw new Error("rotation must be 0, 90, 180, or 270");
   return resolved;
 }

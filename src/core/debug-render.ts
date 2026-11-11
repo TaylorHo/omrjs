@@ -1,5 +1,6 @@
 import type { Data } from "../data.js";
 import { buildIntegral, rectSum } from "../math/integral.js";
+import type { RasterImage } from "../types.js";
 import { binarize, computeOtsuThreshold } from "./preprocess.js";
 
 const BLOCK_COLORS: [number, number, number][] = [
@@ -41,13 +42,72 @@ function blendPixel(
   b: number,
   alpha: number,
 ) {
-  if (x < 0 || y < 0) return;
+  if (x < 0 || y < 0 || x >= width) return;
   const o = (y * width + x) * 4;
   if (o >= data.length) return;
   const inv = 1 - alpha;
   data[o] = Math.round(data[o]! * inv + r * alpha);
   data[o + 1] = Math.round(data[o + 1]! * inv + g * alpha);
   data[o + 2] = Math.round(data[o + 2]! * inv + b * alpha);
+}
+
+/** Draw the configuration only; no thresholding or answer classification. */
+export function renderLayoutGrid(
+  image: RasterImage,
+  data: Data,
+  scale: number,
+) {
+  const rgba = new Uint8ClampedArray(image.data);
+  const warnings: string[] = [];
+  data.answersBlocks.forEach((block, index) => {
+    const [r, g, b] = BLOCK_COLORS[index % BLOCK_COLORS.length]!;
+    const w = block.width * scale;
+    const h = (block.height ?? block.width) * scale;
+    const right =
+      (block.startX +
+        (block.columns - 1) * (block.width + block.gaps.columns) +
+        block.width) *
+      scale;
+    const bottom =
+      (block.startY +
+        (block.rows - 1) * ((block.height ?? block.width) + block.gaps.rows) +
+        (block.height ?? block.width)) *
+      scale;
+    if (right > image.width || bottom > image.height)
+      warnings.push(
+        `Block ${index + 1} extends outside the marker frame; check its layout, cornerSize, aspect ratio, or rotation.`,
+      );
+    for (let row = 0; row < block.rows; row++) {
+      for (let col = 0; col < block.columns; col++) {
+        const x = Math.round(
+          (block.startX + col * (block.width + block.gaps.columns)) * scale,
+        );
+        const y = Math.round(
+          (block.startY +
+            row * ((block.height ?? block.width) + block.gaps.rows)) *
+            scale,
+        );
+        const x1 = Math.round(x + w),
+          y1 = Math.round(y + h);
+        if (x >= image.width || y >= image.height) continue;
+        drawRectBorder(
+          rgba,
+          image.width,
+          x,
+          y,
+          Math.min(image.width, x1),
+          Math.min(image.height, y1),
+          r,
+          g,
+          b,
+        );
+      }
+    }
+  });
+  return {
+    image: { data: rgba, width: image.width, height: image.height },
+    warnings,
+  };
 }
 
 function fillRect(

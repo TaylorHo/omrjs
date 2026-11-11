@@ -2,19 +2,16 @@ import { computeOtsuThreshold } from "../core/preprocess.js";
 import type { ImageMarker } from "../data.js";
 import {
   computeTemplateStats,
-  findBestNccMatch,
-  type NccMatch,
   type TemplateStats,
 } from "../math/correlation.js";
-
-/** Reference template size at scale 1 — matches bullseye corner search. */
-const REFERENCE_SIZE = 15;
 
 export type PreparedImageTemplate = {
   template: Float32Array;
   width: number;
   height: number;
   stats: TemplateStats;
+  /** Area and centroid in coordinates normalized by the full reference width. */
+  ink: { area: number; x: number; y: number };
 };
 
 function grayscaleFromRgba(
@@ -27,7 +24,9 @@ function grayscaleFromRgba(
     const r = pixels[i * 4]!;
     const g = pixels[i * 4 + 1]!;
     const b = pixels[i * 4 + 2]!;
-    gray[i] = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    const alpha = pixels[i * 4 + 3]! / 255;
+    gray[i] =
+      ((0.299 * r + 0.587 * g + 0.114 * b) * alpha + 255 * (1 - alpha)) / 255;
   }
   return gray;
 }
@@ -49,83 +48,34 @@ export function prepareImageMarkerTemplate(
   const { pixels, width, height } = marker;
   const gray = grayscaleFromRgba(pixels, width, height);
   const template = binarizeTemplate(gray);
+  let black = 1,
+    white = 0;
+  for (const value of gray) {
+    black = Math.min(black, value);
+    white = Math.max(white, value);
+  }
+  let area = 0,
+    mx = 0,
+    my = 0;
+  if (white > black) {
+    for (let y = 0; y < height; y++)
+      for (let x = 0; x < width; x++) {
+        const weight = (white - gray[y * width + x]!) / (white - black);
+        area += weight;
+        mx += weight * (x + 0.5);
+        my += weight * (y + 0.5);
+      }
+  }
 
   return {
     template,
     width,
     height,
     stats: computeTemplateStats(template),
+    ink: {
+      area: area / (width * width),
+      x: mx / area / width,
+      y: my / area / width,
+    },
   };
-}
-
-function resizeTemplate(
-  template: Float32Array,
-  srcWidth: number,
-  srcHeight: number,
-  dstSize: number,
-): Float32Array {
-  const dst = new Float32Array(dstSize * dstSize);
-  for (let y = 0; y < dstSize; y++) {
-    for (let x = 0; x < dstSize; x++) {
-      const sx = Math.min(
-        srcWidth - 1,
-        Math.floor(((x + 0.5) * srcWidth) / dstSize),
-      );
-      const sy = Math.min(
-        srcHeight - 1,
-        Math.floor(((y + 0.5) * srcHeight) / dstSize),
-      );
-      dst[y * dstSize + x] = template[sy * srcWidth + sx]!;
-    }
-  }
-  return dst;
-}
-
-export function findImageMarkerMatch(
-  image: Float32Array,
-  width: number,
-  height: number,
-  prepared: PreparedImageTemplate,
-  scale: number,
-  nccThreshold: number,
-  x0: number,
-  y0: number,
-  x1: number,
-  y1: number,
-  fixedSize?: number,
-): NccMatch | null {
-  const targetSize =
-    fixedSize ?? Math.max(7, Math.round(REFERENCE_SIZE * scale));
-
-  const template =
-    targetSize === prepared.width && targetSize === prepared.height
-      ? prepared.template
-      : resizeTemplate(
-          prepared.template,
-          prepared.width,
-          prepared.height,
-          targetSize,
-        );
-
-  const stats =
-    template === prepared.template
-      ? prepared.stats
-      : computeTemplateStats(template);
-
-  const match = findBestNccMatch(
-    image,
-    width,
-    height,
-    template,
-    targetSize,
-    targetSize,
-    stats,
-    x0,
-    y0,
-    x1,
-    y1,
-  );
-
-  if (!match || match.score < nccThreshold) return null;
-  return match;
 }
