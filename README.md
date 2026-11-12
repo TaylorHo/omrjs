@@ -33,8 +33,8 @@ const data = {
       columns: 5,
       width: 50,
       gaps: { columns: 21, rows: 30 },
-    }
-  ]
+    },
+  ],
 };
 
 const omr = new OMR(data, { aspectRatio: 0.75 });
@@ -57,24 +57,24 @@ The first argument to `OMR` (or the `data` argument to `process()`) describes th
 
 All distances use `cornerSize` units. Block positions start at the rectified top-left marker center.
 
-| Option | Required | Default | Description |
-| --- | --- | --- | --- |
-| `cornerSize` | yes | — | Full reference-image width, including white margins. Keep layout values unchanged when resizing the same sheet. |
-| `cornerPattern` | no | `"bullseye"` | Corner marker used to locate and warp the sheet. Use `"bullseye"` for the built-in pattern, or an `ImageMarker` object for a custom image. |
-| `answersBlocks` | yes | — | Array of answer regions on the sheet. Each block is a grid of bubbles to read. |
+| Option          | Required | Default      | Description                                                                                                                                |
+| --------------- | -------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `cornerSize`    | yes      | —            | Full reference-image width, including white margins. Keep layout values unchanged when resizing the same sheet.                            |
+| `cornerPattern` | no       | `"bullseye"` | Corner marker used to locate and warp the sheet. Use `"bullseye"` for the built-in pattern, or an `ImageMarker` object for a custom image. |
+| `answersBlocks` | yes      | —            | Array of answer regions on the sheet. Each block is a grid of bubbles to read.                                                             |
 
 Each entry in `answersBlocks`:
 
-| Option | Required | Default | Description |
-| --- | --- | --- | --- |
-| `startX` | yes | — | Horizontal offset of the block's top-left bubble, in layout units. |
-| `startY` | yes | — | Vertical offset of the block's top-left bubble, in layout units. |
-| `rows` | yes | — | Number of question rows in the block. |
-| `columns` | yes | — | Number of alternatives (bubbles) per row. |
-| `width` | yes | — | Width of each bubble, in layout units. |
-| `height` | no | `width` | Height of each bubble. Omit for square bubbles. |
-| `gaps.columns` | yes | — | Horizontal gap between bubble borders (not centers), in layout units. |
-| `gaps.rows` | yes | — | Vertical gap between bubble borders, in layout units. |
+| Option         | Required | Default | Description                                                           |
+| -------------- | -------- | ------- | --------------------------------------------------------------------- |
+| `startX`       | yes      | —       | Horizontal offset of the block's top-left bubble, in layout units.    |
+| `startY`       | yes      | —       | Vertical offset of the block's top-left bubble, in layout units.      |
+| `rows`         | yes      | —       | Number of question rows in the block.                                 |
+| `columns`      | yes      | —       | Number of alternatives (bubbles) per row.                             |
+| `width`        | yes      | —       | Width of each bubble, in layout units.                                |
+| `height`       | no       | `width` | Height of each bubble. Omit for square bubbles.                       |
+| `gaps.columns` | yes      | —       | Horizontal gap between bubble borders (not centers), in layout units. |
+| `gaps.rows`    | yes      | —       | Vertical gap between bubble borders, in layout units.                 |
 
 Custom corner marker (`ImageMarker`):
 
@@ -91,26 +91,26 @@ cornerPattern: {
 
 Pass as the second argument to `OMR` or the fifth argument to `process()`:
 
-| Option | Default | Description |
-| --- | --- | --- |
-| `aspectRatio` | required | Width / height between marker centers. Required by `process()` and `rectify()`. |
-| `page.backgroundColor` | `[255, 255, 255]` | Page RGB color used for cropping. |
-| `page.colorTolerance` | `0.15` | Page-color similarity tolerance (0–1). |
-| `rotation` | `0` | Clockwise rotation: `0`, `90`, `180`, or `270`. Used by `rectify()` or manual orientation. |
-| `nccThreshold` | `0.5` | Minimum marker correlation score (0–1). |
-| `fillThreshold` | `0.5` | Interior ink coverage after letter compensation. Cells within ±0.1 of this threshold are uncertain. |
-| `outputFormat` | `{ type: "letter" }` | Shape of values in `result.answers`. `"letter"` returns `"a"`, `"b"`, `"c"`, … per column. `"number"` returns `1`, `2`, `3`, … with optional `startAt: 0` for zero-based numbering. |
-| `debug` | `false` | Include cell measurements, orientation decisions, markers, and inspection images in `result.debug`. |
-| `orientation` | `"auto"` | Match the printed grid at all four quarter turns. Use `"none"` with `rotation` for symmetric layouts. `"portrait"` and `"landscape"` remain aliases for auto. |
+| Option                 | Default              | Description                                                                                                                                                                         |
+| ---------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `aspectRatio`          | required             | Width / height between marker centers. Required by `process()` and `rectify()`.                                                                                                     |
+| `page.backgroundColor` | `[255, 255, 255]`    | Page RGB color used for cropping.                                                                                                                                                   |
+| `page.colorTolerance`  | `0.15`               | Page-color similarity tolerance (0–1).                                                                                                                                              |
+| `rotation`             | `0`                  | Clockwise rotation: `0`, `90`, `180`, or `270`. Used by `rectify()` or manual orientation.                                                                                          |
+| `nccThreshold`         | `0.5`                | Minimum marker correlation score (0–1).                                                                                                                                             |
+| `fillThreshold`        | `0.5`                | Interior ink coverage after letter compensation. Cells within ±0.1 of this threshold are uncertain.                                                                                 |
+| `outputFormat`         | `{ type: "letter" }` | Shape of values in `result.answers`. `"letter"` returns `"a"`, `"b"`, `"c"`, … per column. `"number"` returns `1`, `2`, `3`, … with optional `startAt: 0` for zero-based numbering. |
+| `debug`                | `false`              | Include cell measurements, orientation decisions, markers, and inspection images in `result.debug`.                                                                                 |
+| `orientation`          | `"auto"`             | Match the printed grid at all four quarter turns. Use `"none"` with `rotation` for symmetric layouts. `"portrait"` and `"landscape"` remain aliases for auto.                       |
 
 ### Web Worker
 
 Offload processing to a background thread in the browser:
 
-| Option | Default | Description |
-| --- | --- | --- |
-| `worker.enabled` | `false` | When `true`, runs the pipeline inside a Web Worker instead of the main thread. |
-| `worker.url` | — | URL to a worker script the browser can load. Required when `worker.enabled` is `true`. The package exports a ready-made worker at `omrjs/worker` — resolve it through your bundler (e.g. Vite's `?worker&url` import). |
+| Option           | Default | Description                                                                                                                                                                                                            |
+| ---------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `worker.enabled` | `false` | When `true`, runs the pipeline inside a Web Worker instead of the main thread.                                                                                                                                         |
+| `worker.url`     | —       | URL to a worker script the browser can load. Required when `worker.enabled` is `true`. The package exports a ready-made worker at `omrjs/worker` — resolve it through your bundler (e.g. Vite's `?worker&url` import). |
 
 ### Full example
 
@@ -136,8 +136,8 @@ const data = {
       columns: 5,
       width: 50,
       gaps: { columns: 21, rows: 30 },
-    }
-  ]
+    },
+  ],
 };
 
 const config = {
