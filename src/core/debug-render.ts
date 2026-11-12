@@ -1,7 +1,5 @@
 import type { Data } from "../data.js";
-import { buildIntegral, rectSum } from "../math/integral.js";
-import type { RasterImage } from "../types.js";
-import { binarize, computeOtsuThreshold } from "./preprocess.js";
+import type { CellMeasurement, RasterImage } from "../types.js";
 
 const BLOCK_COLORS: [number, number, number][] = [
   [0, 200, 255],
@@ -14,23 +12,6 @@ const BLOCK_COLORS: [number, number, number][] = [
 
 const BORDER_WIDTH = 2;
 const MARKED_ALPHA = 0.3;
-
-function grayToRgba(
-  gray: Float32Array,
-  width: number,
-  height: number,
-): Uint8ClampedArray {
-  const data = new Uint8ClampedArray(width * height * 4);
-  for (let i = 0; i < gray.length; i++) {
-    const v = Math.round(Math.min(1, Math.max(0, gray[i]!)) * 255);
-    const o = i * 4;
-    data[o] = v;
-    data[o + 1] = v;
-    data[o + 2] = v;
-    data[o + 3] = 255;
-  }
-  return data;
-}
 
 function blendPixel(
   data: Uint8ClampedArray,
@@ -110,30 +91,6 @@ export function renderLayoutGrid(
   };
 }
 
-function fillRect(
-  data: Uint8ClampedArray,
-  width: number,
-  height: number,
-  x0: number,
-  y0: number,
-  x1: number,
-  y1: number,
-  r: number,
-  g: number,
-  b: number,
-  alpha: number,
-) {
-  const left = Math.max(0, x0);
-  const top = Math.max(0, y0);
-  const right = Math.min(width, x1);
-  const bottom = Math.min(height, y1);
-  for (let y = top; y < bottom; y++) {
-    for (let x = left; x < right; x++) {
-      blendPixel(data, width, x, y, r, g, b, alpha);
-    }
-  }
-}
-
 function drawRectBorder(
   data: Uint8ClampedArray,
   width: number,
@@ -157,57 +114,37 @@ function drawRectBorder(
   }
 }
 
-export function renderDebugGrid(
-  warpedGray: Float32Array,
-  width: number,
-  height: number,
-  data: Data,
-  scaleFactor: number,
-  fillThreshold: number,
-): { data: Uint8ClampedArray; width: number; height: number } {
-  const rgba = grayToRgba(warpedGray, width, height);
-
-  const threshold = computeOtsuThreshold(warpedGray);
-  const binary = binarize(warpedGray, threshold);
-  const sat = buildIntegral(binary, width, height);
-
-  for (
-    let blockIndex = 0;
-    blockIndex < data.answersBlocks.length;
-    blockIndex++
-  ) {
-    const block = data.answersBlocks[blockIndex]!;
-    const [r, g, b] = BLOCK_COLORS[blockIndex % BLOCK_COLORS.length]!;
-
-    const cellW = block.width * scaleFactor;
-    const cellH = (block.height ?? block.width) * scaleFactor;
-    const gapCol = block.gaps.columns * scaleFactor;
-    const gapRow = block.gaps.rows * scaleFactor;
-    const startX = block.startX * scaleFactor;
-    const startY = block.startY * scaleFactor;
-
-    for (let row = 0; row < block.rows; row++) {
-      const y = Math.round(startY + row * (cellH + gapRow));
-      const y1 = Math.min(Math.round(y + cellH), height);
-
-      for (let col = 0; col < block.columns; col++) {
-        const x = Math.round(startX + col * (cellW + gapCol));
-        const x1 = Math.min(Math.round(x + cellW), width);
-
-        if (x >= width || y >= height || x1 <= x || y1 <= y) continue;
-
-        drawRectBorder(rgba, width, x, y, x1, y1, r, g, b);
-
-        const inkSum = rectSum(sat, x, y, x1, y1, width);
-        const area = (x1 - x) * (y1 - y);
-        const fillRatio = inkSum / area;
-
-        if (fillRatio > fillThreshold) {
-          fillRect(rgba, width, height, x, y, x1, y1, r, g, b, MARKED_ALPHA);
-        }
+/** Render the returned measurements, without recomputing thresholds or decisions. */
+export function renderRecognitionGrid(
+  image: RasterImage,
+  blocks: CellMeasurement[][][],
+) {
+  const rgba = new Uint8ClampedArray(image.data);
+  for (const cell of blocks.flat(2)) {
+    const color: [number, number, number] =
+      cell.status === "marked"
+        ? [0, 190, 90]
+        : cell.status === "uncertain"
+          ? [255, 150, 0]
+          : [0, 160, 255];
+    const { x, y, width: w, height: h } = cell;
+    for (let py = y; py < y + h; py++)
+      for (let px = x; px < x + w; px++) {
+        const dx = Math.abs((px + 0.5 - x - w / 2) / (w / 2));
+        const dy = Math.abs((py + 0.5 - y - h / 2) / (h / 2));
+        const radius =
+          cell.shape === "ellipse" ? Math.hypot(dx, dy) : Math.max(dx, dy);
+        const insetX = (dx * w) / (w - BORDER_WIDTH * 2);
+        const insetY = (dy * h) / (h - BORDER_WIDTH * 2);
+        const insideBorder =
+          cell.shape === "ellipse"
+            ? Math.hypot(insetX, insetY)
+            : Math.max(insetX, insetY);
+        if (radius <= 1 && insideBorder >= 1)
+          blendPixel(rgba, image.width, px, py, ...color, 1);
+        else if (radius < 0.65 && cell.status !== "blank")
+          blendPixel(rgba, image.width, px, py, ...color, MARKED_ALPHA);
       }
-    }
   }
-
-  return { data: rgba, width, height };
+  return { data: rgba, width: image.width, height: image.height };
 }

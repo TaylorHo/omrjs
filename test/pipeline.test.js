@@ -2,11 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { process } from "../dist/index.js";
 import { generateBullseyeTemplate } from "../dist/patterns/bullseye.js";
-import {
-  createSyntheticSheet,
-  sampleData,
-  templateToImageMarker,
-} from "./synthetic.js";
+import { createSyntheticSheet, sampleData } from "../example/synthetic.js";
+import { templateToImageMarker } from "./synthetic.js";
 
 describe("pipeline", () => {
   it("detects marked answers on a synthetic sheet", async () => {
@@ -23,6 +20,7 @@ describe("pipeline", () => {
     );
 
     const result = await process(pixels, width, height, sampleData, {
+      aspectRatio: 0.75,
       nccThreshold: 0.4,
       fillThreshold: 0.3,
       outputFormat: { type: "letter" },
@@ -59,6 +57,7 @@ describe("pipeline", () => {
       height,
       { ...sampleData, cornerPattern },
       {
+        aspectRatio: 0.75,
         nccThreshold: 0.4,
         fillThreshold: 0.3,
         outputFormat: { type: "letter" },
@@ -79,6 +78,7 @@ describe("pipeline", () => {
     );
 
     const result = await process(pixels, width, height, sampleData, {
+      aspectRatio: 0.75,
       nccThreshold: 0.4,
       fillThreshold: 0.3,
       outputFormat: { type: "number", startAt: 1 },

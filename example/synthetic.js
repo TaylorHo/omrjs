@@ -1,4 +1,4 @@
-import { generateBullseyeTemplate } from "../dist/patterns/bullseye.js";
+import { BULLSEYE_RADII } from "../dist/patterns/bullseye-bitmap.js";
 
 export const sampleData = {
   cornerPattern: "bullseye",
@@ -82,7 +82,6 @@ export function createSyntheticSheet(
   const markerW = Math.max(9, Math.round(data.cornerSize * scale));
   const custom =
     typeof data.cornerPattern === "object" ? data.cornerPattern : null;
-  const builtIn = generateBullseyeTemplate(65);
   const markerH = Math.max(
     7,
     Math.round(markerW * (custom ? custom.height / custom.width : 1)),
@@ -93,22 +92,53 @@ export function createSyntheticSheet(
     [left + frameW, top + frameH],
     [left, top + frameH],
   ]) {
-    for (let y = 0; y < markerH; y++)
-      for (let x = 0; x < markerW; x++) {
-        const sx = Math.floor(((x + 0.5) * (custom?.width ?? 65)) / markerW);
-        const sy = Math.floor(((y + 0.5) * (custom?.height ?? 65)) / markerH);
-        let rgb;
-        if (custom) {
+    if (!custom) {
+      // Preserve fractional marker size and ink coverage; rounded binary stamps bias layout calibration.
+      const markerSize = data.cornerSize * scale;
+      for (
+        let y = Math.floor(cy - markerSize / 2);
+        y < cy + markerSize / 2;
+        y++
+      )
+        for (
+          let x = Math.floor(cx - markerSize / 2);
+          x < cx + markerSize / 2;
+          x++
+        ) {
+          let ink = 0;
+          for (let sy = 0; sy < 8; sy++)
+            for (let sx = 0; sx < 8; sx++) {
+              const r =
+                Math.hypot(x + (sx + 0.5) / 8 - cx, y + (sy + 0.5) / 8 - cy) /
+                markerSize;
+              if (
+                (r >= BULLSEYE_RADII[0] && r <= BULLSEYE_RADII[1]) ||
+                (r >= BULLSEYE_RADII[2] && r <= BULLSEYE_RADII[3])
+              )
+                ink++;
+            }
+          put(
+            x,
+            y,
+            color.map((v) => v * (1 - ink / 64)),
+          );
+        }
+    } else
+      for (let y = 0; y < markerH; y++)
+        for (let x = 0; x < markerW; x++) {
+          const sx = Math.floor(((x + 0.5) * custom.width) / markerW);
+          const sy = Math.floor(((y + 0.5) * custom.height) / markerH);
           const i = (sy * custom.width + sx) * 4;
           const a = custom.pixels[i + 3] / 255;
-          rgb = color.map((v, c) => custom.pixels[i + c] * a + v * (1 - a));
-        } else rgb = builtIn.template[sy * 65 + sx] > 0.5 ? [0, 0, 0] : color;
-        put(
-          Math.round(cx - markerW / 2) + x,
-          Math.round(cy - markerH / 2) + y,
-          rgb,
-        );
-      }
+          const rgb = color.map(
+            (v, c) => custom.pixels[i + c] * a + v * (1 - a),
+          );
+          put(
+            Math.round(cx - markerW / 2) + x,
+            Math.round(cy - markerH / 2) + y,
+            rgb,
+          );
+        }
   }
   data.answersBlocks.forEach((block, bi) => {
     const cw = block.width * scale,
@@ -142,8 +172,9 @@ export function createSyntheticSheet(
                     (dx * cw) / Math.max(1, cw - 3),
                     (dy * ch) / Math.max(1, ch - 3),
                   );
-            if (outer <= 1 && (inner >= 1 || (marked && outer < 0.75)))
-              put(x, y, [15, 15, 15]);
+            if (outer <= 1 && inner >= 1) put(x, y, [15, 15, 15]);
+            else if (marked && outer < 0.75 && dx < (options.markWidth ?? 1))
+              put(x, y, options.markColor ?? [15, 15, 15]);
           }
       }
   });

@@ -27,6 +27,7 @@ export type WorkerResponse =
       error: string;
       stage?: RectificationError["stage"];
       page?: DetectedPage;
+      inspection?: RectificationResult;
     };
 
 export async function handleWorkerRequest(
@@ -45,7 +46,11 @@ export async function handleWorkerRequest(
       ok: false,
       error: error instanceof Error ? error.message : String(error),
       ...(error instanceof RectificationError
-        ? { stage: error.stage, ...(error.page ? { page: error.page } : {}) }
+        ? {
+            stage: error.stage,
+            ...(error.page ? { page: error.page } : {}),
+            ...(error.inspection ? { inspection: error.inspection } : {}),
+          }
         : {}),
     };
   }

@@ -215,10 +215,3 @@ export function initSheetLayout(listEl, state, onChange) {
     onChange(event);
   });
 }
-
-/** Build demo marks from block dimensions (diagonal pattern). */
-export function buildSampleMarks(data) {
-  return data.answersBlocks.map((block) =>
-    Array.from({ length: block.rows }, (_, row) => [row % block.columns]),
-  );
-}

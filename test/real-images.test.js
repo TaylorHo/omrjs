@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { it } from "node:test";
 import jpeg from "jpeg-js";
 import { connectedComponents } from "../dist/core/components.js";
-import { resolveConfig } from "../dist/index.js";
+import { process, resolveConfig } from "../dist/index.js";
 import { handleWorkerRequest } from "../dist/worker/worker.js";
 
 // The user's configuration is deliberately shared by all three original JPEGs.
@@ -25,6 +25,54 @@ const config = resolveConfig({
   rotation: 0,
   nccThreshold: 0.5,
   worker: { enabled: true, url: "./worker-entry.js" },
+});
+
+it("retains geometry diagnostics when rejecting an incompatible saved layout", async () => {
+  const decoded = jpeg.decode(
+    readFileSync(
+      new URL("../example/example-images/answers-sheet-0.jpg", import.meta.url),
+    ),
+    { useTArray: true },
+  );
+  const wrongData = {
+    ...data,
+    answersBlocks: [178, 1370].map((startX) => ({
+      startX,
+      startY: 388,
+      rows: 20,
+      columns: 5,
+      width: 81,
+      gaps: { columns: 36, rows: 54 },
+    })),
+  };
+  const pixels = new Uint8ClampedArray(decoded.data);
+  const request = {
+    id: 88,
+    pixels,
+    width: decoded.width,
+    height: decoded.height,
+    data: wrongData,
+    config: resolveConfig({ aspectRatio: 0.75 }),
+  };
+  const response = structuredClone(await handleWorkerRequest(request));
+  assert.equal(response.ok, false);
+  assert.equal(response.stage, "grid");
+  assert.match(response.error, /Markers were detected/);
+  assert.equal(response.inspection.markers.length, 4);
+  assert.ok(response.inspection.rectified.data instanceof Uint8ClampedArray);
+  assert.ok(response.inspection.gridImage.width > 0);
+  await assert.rejects(
+    process(pixels, decoded.width, decoded.height, wrongData, {
+      aspectRatio: 0.75,
+    }),
+    (e) => {
+      assert.equal(e.stage, "grid");
+      assert.equal(e.inspection.markers.length, 4);
+      assert.deepEqual(e.inspection.gridImage, response.inspection.gridImage);
+      assert.ok(!e.message.includes("0°:"));
+      return true;
+    },
+  );
 });
 
 function cellCenters(result) {
@@ -127,4 +175,41 @@ it("aligns all 600 cells in the original, reduced/background, and rotated/warped
         `image ${image}, cell ${i}: y drift`,
       );
     }
+});
+
+// All three photos show the same independently inspected repeating A–E answer key.
+it("reads all 120 real-image answers identically on the main thread and worker protocol", async () => {
+  const expected = Array.from({ length: 2 }, () =>
+    Array.from({ length: 20 }, (_, row) => ["abcde"[row % 5]]),
+  );
+  for (const index of [0, 1, 2]) {
+    const image = jpeg.decode(
+      readFileSync(
+        new URL(
+          `../example/example-images/answers-sheet-${index}.jpg`,
+          import.meta.url,
+        ),
+      ),
+      { useTArray: true },
+    );
+    const pixels = new Uint8ClampedArray(image.data);
+    const result = await process(pixels, image.width, image.height, data, {
+      ...config,
+      worker: { enabled: false },
+    });
+    assert.deepEqual(result.answers, expected, `JPEG ${index}`);
+    assert.deepEqual(result.warnings, []);
+    assert.deepEqual(Object.keys(result).sort(), ["answers", "warnings"]);
+    const response = await handleWorkerRequest({
+      id: index,
+      operation: "process",
+      pixels,
+      width: image.width,
+      height: image.height,
+      data,
+      config,
+    });
+    assert.equal(response.ok, true, response.error);
+    assert.deepEqual(response.result, result);
+  }
 });

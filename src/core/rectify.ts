@@ -11,7 +11,7 @@ import { calibrateFrame } from "./calibrate.js";
 import { renderLayoutGrid } from "./debug-render.js";
 import { detectMarkers } from "./detect.js";
 import { detectPage } from "./page.js";
-import { preprocess } from "./preprocess.js";
+import { adaptiveInkMask, preprocess } from "./preprocess.js";
 import { warpRgba } from "./warp.js";
 
 function validateInput(
@@ -93,16 +93,16 @@ function validateInput(
   }
 }
 
-export function runRectification(
+export function prepareRectification(
   pixels: Uint8ClampedArray,
   width: number,
   height: number,
   data: Data,
   config: ResolvedConfig,
-): RectificationResult {
+) {
   validateInput(pixels, width, height, data, config);
   let page: DetectedPage | undefined;
-  let stage: "page" | "markers" | "warp" = "page";
+  let stage: "page" | "markers" = "page";
   try {
     page = detectPage(pixels, width, height, config);
     stage = "markers";
@@ -138,13 +138,31 @@ export function runRectification(
       grayscale: "luminance",
       exposureGamma: 1,
     });
-    const detection = detectMarkers(
-      Float32Array.from(prepared.binary),
-      dw,
-      dh,
-      data,
-      config.nccThreshold,
-    );
+    let detection: ReturnType<typeof detectMarkers>;
+    try {
+      detection = detectMarkers(
+        Float32Array.from(prepared.binary),
+        dw,
+        dh,
+        data,
+        config.nccThreshold,
+      );
+    } catch {
+      // A global threshold can merge shaded paper with ink; retry using local contrast.
+      const mask = adaptiveInkMask(
+        prepared.gray,
+        dw,
+        dh,
+        Math.max(8, Math.round(Math.min(dw, dh) / 16)),
+      );
+      detection = detectMarkers(
+        Float32Array.from(mask),
+        dw,
+        dh,
+        data,
+        config.nccThreshold,
+      );
+    }
     for (const marker of detection.markers) {
       marker.x *= image.width / dw;
       marker.y *= image.height / dh;
@@ -156,7 +174,32 @@ export function runRectification(
         p.y *= image.height / dh;
       }
     }
-    stage = "warp";
+    return { page, detection };
+  } catch (error) {
+    if (error instanceof RectificationError) throw error;
+    throw new RectificationError(
+      stage,
+      error instanceof Error ? error.message : String(error),
+      page,
+    );
+  }
+}
+
+export function rectifyPrepared(
+  prepared: ReturnType<typeof prepareRectification>,
+  data: Data,
+  config: ResolvedConfig,
+): RectificationResult {
+  const { page } = prepared;
+  // Calibration refines centers; each candidate must start from the same detected geometry.
+  const detection = {
+    ...prepared.detection,
+    markers: prepared.detection.markers.map((m) => ({
+      ...m,
+    })) as typeof prepared.detection.markers,
+  };
+  const image = page.image;
+  try {
     const calibration = calibrateFrame(
       image,
       detection,
@@ -230,9 +273,23 @@ export function runRectification(
   } catch (error) {
     if (error instanceof RectificationError) throw error;
     throw new RectificationError(
-      stage,
+      "warp",
       error instanceof Error ? error.message : String(error),
       page,
     );
   }
+}
+
+export function runRectification(
+  pixels: Uint8ClampedArray,
+  width: number,
+  height: number,
+  data: Data,
+  config: ResolvedConfig,
+): RectificationResult {
+  return rectifyPrepared(
+    prepareRectification(pixels, width, height, data, config),
+    data,
+    config,
+  );
 }

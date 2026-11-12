@@ -11,7 +11,7 @@
 <body>
   <header>
     <h1>omrjs</h1>
-    <p>Page detection and perspective correction</p>
+    <p>Page detection, grid validation, and answer recognition</p>
   </header>
 
   <main>
@@ -57,7 +57,7 @@
 
         <button id="add-block-btn" type="button" class="small wide">Add answer block</button>
 
-        <h2 class="section-title">Rectification</h2>
+        <h2 class="section-title">Processing</h2>
 
         <label class="field range-field">
           <span>NCC threshold <output id="ncc-value">0.5</output></span>
@@ -79,16 +79,24 @@
           <small class="field-hint">Measure between marker centers, not page edges. 0.75 is the sample's ratio.</small>
         </label>
         <label class="field">
+          <span>Orientation</span>
+          <select id="orientation"><option value="auto">Automatic (printed grid)</option><option value="none">Manual rotation</option></select>
+        </label>
+        <label class="field range-field">
+          <span>Fill threshold <output id="fill-value">0.5</output></span>
+          <input id="fill-threshold" type="range" min="0.1" max="0.9" step="0.05" value="0.5" />
+        </label>
+        <label class="field">
           <span>Clockwise rotation</span>
           <select id="rotation">
             <option value="0">0°</option><option value="90">90°</option>
             <option value="180">180°</option><option value="270">270°</option>
           </select>
-          <small class="field-hint">Choose manually until printed-grid orientation detection is implemented.</small>
+          <small class="field-hint">Used by manual orientation. Automatic mode validates all four rotations.</small>
         </label>
-        <label class="field">
-          <span>Sample cell shape</span>
-          <select id="sample-shape"><option value="circle">Circles</option><option value="rectangle">Rectangles</option></select>
+        <label class="field checkbox">
+          <input id="debug" type="checkbox" />
+          <span>Debug measurements in JSON output</span>
         </label>
         <label class="field checkbox">
           <input id="use-worker" type="checkbox" checked />
@@ -97,8 +105,10 @@
       </div>
 
       <div class="controls-actions">
+        <button id="upload-image-btn" type="button">Upload Image</button>
+        <input id="file-input" type="file" accept="image/*" hidden />
         <button id="process-btn" type="button" class="primary" disabled>
-          Rectify sheet
+          Process sheet
         </button>
 
         <p id="status" class="status" aria-live="polite"></p>
@@ -127,32 +137,9 @@
     </section>
 
     <div class="output-row">
-      <section class="panel preview">
-        <div class="preview-header">
-          <h2>Preview</h2>
-          <div class="preview-actions">
-            <button id="upload-preview-btn" type="button" class="small">Upload image</button>
-            <button id="sample-preview-btn" type="button" class="small">Generate sample</button>
-          </div>
-        </div>
-
-        <input id="file-input" type="file" accept="image/*" hidden />
-
-        <div class="preview-body">
-          <div id="preview-empty" class="preview-empty">
-            <p>No image loaded</p>
-            <p class="hint">
-              Upload your own scan or generate a sample using the buttons above.
-            </p>
-          </div>
-
-          <canvas id="preview" width="600" height="800" hidden></canvas>
-        </div>
-      </section>
-
       <section class="panel results">
         <div class="results-header">
-          <h2>Rectification</h2>
+          <h2>Recognition</h2>
           <button id="copy-results-btn" type="button" class="small" disabled>Copy</button>
         </div>
 
@@ -168,16 +155,18 @@
             <label class="field">
               <span>Inspect stage</span>
               <select id="inspection-stage">
+                <option value="original" selected>Uploaded image</option>
                 <option value="page">Page crop and marker matches</option>
                 <option value="rectified">Rectified image</option>
-                <option value="grid" selected>Configured grid overlay</option>
+                <option value="grid">Configured cell positions</option>
               </select>
             </label>
             <p id="stage-hint" class="hint"></p>
             <canvas id="debug-canvas"></canvas>
+            <pre id="cell-detail" aria-live="polite"></pre>
           </div>
 
-          <pre id="results">Load an image and click Rectify sheet to inspect its geometry.</pre>
+          <pre id="results">Load an image and click Process sheet to inspect recognized answers.</pre>
         </div>
       </section>
     </div>

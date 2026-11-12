@@ -5,13 +5,13 @@ export type ProcessConfig = {
     backgroundColor?: [number, number, number];
     colorTolerance?: number;
   };
-  /** Width / height between marker centers. Required by rectify(). */
+  /** Width / height between marker centers. Required by process() and rectify(). */
   aspectRatio?: number;
-  /** Clockwise rotation for rectification; automatic grid orientation comes later. */
+  /** Clockwise rotation for rectify(), or for process() when orientation is "none". */
   rotation?: 0 | 90 | 180 | 270;
   /** 0–1 correlation score to accept a corner match. Default: 0.5 */
   nccThreshold?: number;
-  /** 0–1 ink fill ratio to mark a cell as checked. Default: 0.5 */
+  /** 0–1 letter-compensated interior ink coverage to mark a cell as checked. Default: 0.5 */
   fillThreshold?: number;
   /**
    * Format for answer values in the result.
@@ -21,18 +21,18 @@ export type ProcessConfig = {
   /** Return extra info in result.debug. Default: false */
   debug?: boolean;
   /**
-   * Expected sheet orientation. Auto-rotates landscape inputs to portrait (A4 upright)
-   * and tries a 180° flip when no answers are found. Default: 'portrait'
+   * "auto" (default), "portrait", and "landscape" test all four grid orientations.
+   * "none" uses only rotation; use it for a symmetric printed layout.
    */
-  orientation?: "portrait" | "landscape" | "none";
+  orientation?: "auto" | "portrait" | "landscape" | "none";
 };
 
 /** Advanced config — extends ProcessConfig with fine-grained control. */
 export type AdvancedConfig = ProcessConfig & {
   improvements?: {
-    /** Grayscale conversion method. Default: 'luminance' */
+    /** @deprecated Ignored; geometry and recognition use unbrightened luminance. Previously: 'luminance' */
     grayscale?: "luminance" | "average";
-    /** Gamma value for exposure brightening. Default: 2.2 */
+    /** @deprecated Ignored; cell-local contrast replaces exposure brightening. Previously: 2.2 */
     exposureGamma?: number;
     /** @deprecated Ignored by component-based marker detection. */
     detectionScales?: number[];
@@ -55,7 +55,7 @@ export type ResolvedConfig = {
   fillThreshold: number;
   outputFormat: { type: "letter" } | { type: "number"; startAt: 0 | 1 };
   debug: boolean;
-  orientation: "portrait" | "landscape" | "none";
+  orientation: "auto" | "portrait" | "landscape" | "none";
   grayscale: "luminance" | "average";
   exposureGamma: number;
   detectionScales: number[];
@@ -71,7 +71,7 @@ export const DEFAULT_CONFIG: ResolvedConfig = {
   fillThreshold: 0.5,
   outputFormat: { type: "letter" },
   debug: false,
-  orientation: "portrait",
+  orientation: "auto",
   grayscale: "luminance",
   exposureGamma: 2.2,
   detectionScales: [0.5, 1, 1.5, 2],
@@ -128,6 +128,7 @@ export function resolveConfig(
   for (const [name, value] of [
     ["Page colorTolerance", resolved.page.colorTolerance],
     ["NCC threshold", resolved.nccThreshold],
+    ["Fill threshold", resolved.fillThreshold],
   ] as const) {
     if (!Number.isFinite(value) || value < 0 || value > 1)
       throw new Error(`${name} must be between 0 and 1`);
@@ -139,5 +140,13 @@ export function resolveConfig(
     throw new Error("aspectRatio must be positive and finite");
   if (![0, 90, 180, 270].includes(resolved.rotation))
     throw new Error("rotation must be 0, 90, 180, or 270");
+  if (!["auto", "portrait", "landscape", "none"].includes(resolved.orientation))
+    throw new Error("orientation must be auto, portrait, landscape, or none");
+  if (
+    !["letter", "number"].includes(outputFormat.type) ||
+    (resolved.outputFormat.type === "number" &&
+      ![0, 1].includes(resolved.outputFormat.startAt))
+  )
+    throw new Error("Invalid output format");
   return resolved;
 }

@@ -30,9 +30,17 @@ export type RectificationResult = {
 
 export class RectificationError extends Error {
   constructor(
-    public readonly stage: "input" | "page" | "markers" | "warp",
+    public readonly stage:
+      | "input"
+      | "page"
+      | "markers"
+      | "warp"
+      | "grid"
+      | "orientation",
     message: string,
     public readonly page?: DetectedPage,
+    /** Successful geometry retained on grid/orientation failures, independently of debug. */
+    public readonly inspection?: RectificationResult,
   ) {
     super(message);
     this.name = "RectificationError";
@@ -46,6 +54,25 @@ export class RectificationError extends Error {
  */
 export type Answer = string | number;
 
+export type CellMeasurement = {
+  /** Detected bounds in rectified pixels. */
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  shape: "ellipse" | "rectangle";
+  outlineScore: number;
+  /** Interior ink coverage before and after printed-letter compensation. */
+  inkRatio: number;
+  fillRatio: number;
+  status: "blank" | "marked" | "uncertain";
+};
+export type OrientationCandidate = {
+  rotation: 0 | 90 | 180 | 270;
+  valid: boolean;
+  score: number;
+  reason?: string;
+};
 /**
  * result.answers[blockIndex][rowIndex] = Answer[]
  *
@@ -54,20 +81,16 @@ export type Answer = string | number;
  */
 export type Result = {
   answers: Answer[][][];
-  orientation?: {
-    /** Total rotation applied to the input (0, 90, 180, or 270 degrees clockwise). */
-    appliedRotation: 0 | 90 | 180 | 270;
-    /** True when a 180° flip was needed because the first attempt found no answers. */
-    autoFlipped: boolean;
-  };
-  debug?: {
+  /** Recognition/calibration warnings remain available without debug mode. */
+  warnings: string[];
+  debug?: RectificationResult & {
     corners: Corner[];
-    scaleFactor: number;
-    preprocessed?: Float32Array;
-    gridImage?: {
-      data: Uint8ClampedArray;
-      width: number;
-      height: number;
+    cells: CellMeasurement[][][];
+    orientation: {
+      appliedRotation: 0 | 90 | 180 | 270;
+      /** Compatibility field: the chosen rotation differs from the requested one by 180°. */
+      autoFlipped: boolean;
+      candidates: OrientationCandidate[];
     };
   };
 };
@@ -77,9 +100,4 @@ export type PreprocessedImage = {
   binary: Uint8Array;
   width: number;
   height: number;
-};
-
-export type DetectedCorners = {
-  corners: [Corner, Corner, Corner, Corner];
-  scaleFactor: number;
 };

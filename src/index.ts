@@ -15,9 +15,11 @@ export { DEFAULT_CONFIG, resolveConfig } from "./config.js";
 export type { Data, ImageMarker } from "./data.js";
 export type {
   Answer,
+  CellMeasurement,
   Corner,
   DetectedPage,
   Marker,
+  OrientationCandidate,
   RasterImage,
   RectificationResult,
   Result,

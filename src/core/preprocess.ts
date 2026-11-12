@@ -1,4 +1,5 @@
 import type { ResolvedConfig } from "../config.js";
+import { buildIntegral, rectSum } from "../math/integral.js";
 import type { PreprocessedImage } from "../types.js";
 
 export function computeOtsuThreshold(gray: Float32Array): number {
@@ -39,7 +40,7 @@ export function computeOtsuThreshold(gray: Float32Array): number {
   return threshold / 255;
 }
 
-function toGrayscale(
+export function toGrayscale(
   pixels: Uint8ClampedArray,
   width: number,
   height: number,
@@ -86,4 +87,27 @@ export function preprocess(
   const threshold = computeOtsuThreshold(gray);
   const binary = binarize(gray, threshold);
   return { gray, binary, width, height };
+}
+
+/** Local contrast keeps a smooth shadow from becoming a connected ink region. */
+export function adaptiveInkMask(
+  gray: Float32Array,
+  width: number,
+  height: number,
+  radius: number,
+) {
+  const integral = buildIntegral(gray, width, height);
+  const mask = new Uint8Array(gray.length);
+  for (let y = 0; y < height; y++) {
+    const y0 = Math.max(0, y - radius),
+      y1 = Math.min(height, y + radius + 1);
+    for (let x = 0; x < width; x++) {
+      const x0 = Math.max(0, x - radius),
+        x1 = Math.min(width, x + radius + 1);
+      const mean =
+        rectSum(integral, x0, y0, x1, y1, width) / ((x1 - x0) * (y1 - y0));
+      mask[y * width + x] = gray[y * width + x]! < mean * 0.75 ? 1 : 0;
+    }
+  }
+  return mask;
 }

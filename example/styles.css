@@ -64,7 +64,7 @@ main {
 
 .output-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.75rem;
   min-width: 0;
   min-height: 0;
@@ -80,7 +80,6 @@ main {
   min-height: 0;
 }
 
-.panel.preview,
 .panel.results {
   display: flex;
   flex-direction: column;
@@ -242,7 +241,7 @@ button:hover:not(:disabled) {
 }
 
 button.primary {
-  margin-top: 0;
+  margin-top: 0.5rem;
   background: var(--accent);
   border-color: var(--accent);
   color: #04101f;
@@ -296,60 +295,15 @@ button:disabled {
   margin-top: 0.65rem;
 }
 
-.preview-header,
 .results-header {
   flex-shrink: 0;
 }
 
-.preview-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 0.65rem;
-}
-
-.preview-body,
 .results-body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   padding-right: 0.15rem;
-}
-
-.preview-header h2 {
-  margin: 0;
-}
-
-.preview-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.preview-empty[hidden] {
-  display: none;
-}
-
-.preview-empty:not([hidden]) {
-  display: grid;
-  place-items: center;
-  gap: 0.75rem;
-  min-height: 100%;
-  padding: 2rem 1rem;
-  border: 1px dashed var(--border);
-  border-radius: 8px;
-  text-align: center;
-}
-
-.preview-empty > p:first-child {
-  margin: 0;
-  font-weight: 600;
-}
-
-.preview-empty .hint {
-  margin: 0;
-  max-width: 28rem;
 }
 
 .advanced {
@@ -453,20 +407,6 @@ button:disabled {
 
 .results-header h2 {
   margin: 0;
-}
-
-#preview {
-  display: none;
-  width: 100%;
-  max-width: 100%;
-  height: auto;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: #fff;
-}
-
-#preview:not([hidden]) {
-  display: block;
 }
 
 .debug-grid {
@@ -645,7 +585,6 @@ code {
 
   .output-row {
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto;
     height: auto;
     min-height: 0;
     overflow: visible;
@@ -655,12 +594,10 @@ code {
     max-height: 65vh;
   }
 
-  .preview-body,
   .results-body {
     overflow: visible;
   }
 
-  #preview,
   #debug-canvas {
     max-height: 70vh;
     object-fit: contain;

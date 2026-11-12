@@ -1,10 +1,10 @@
 import { OMR, resolveConfig } from "omrjs";
+import { renderLayoutGrid } from "../dist/core/debug-render.js";
 import { configFormatHint, formatConfigPayload } from "./format-config.js";
 import { loadMarkerImageFromFile, storableToMarker } from "./marker-image.js";
 import {
   appendBlockEditor,
   buildDataFromForm,
-  buildSampleMarks,
   defaultBlock,
   defaultData,
   initSheetLayout,
@@ -15,17 +15,16 @@ import {
   loadStoredPayload,
   saveStoredPayload,
 } from "./storage.js";
-import { createSyntheticSheet } from "./synthetic.js";
 import workerUrl from "./worker-entry.js?worker&url";
 
 const el = (id) => document.getElementById(id);
 const controls = document.querySelector(".controls");
-const preview = el("preview");
 const output = el("debug-canvas");
 const stored = loadStoredPayload();
 let image = null;
 let customMarker = null;
 let inspection = null;
+let recognition = null;
 let busy = false;
 
 function status(message, type = "") {
@@ -50,6 +49,9 @@ function payload(runtime = false) {
       },
       aspectRatio: Number(el("aspect-ratio").value),
       rotation: Number(el("rotation").value),
+      orientation: el("orientation").value,
+      fillThreshold: Number(el("fill-threshold").value),
+      debug: el("debug").checked,
       nccThreshold: Number(el("ncc-threshold").value),
       ...(el("use-worker").checked
         ? {
@@ -75,30 +77,24 @@ function draw(canvas, raster) {
     );
 }
 
-function drawInput(page) {
-  if (!image) return;
-  draw(preview, image);
-  if (!page) return;
-  const ctx = preview.getContext("2d");
-  ctx.strokeStyle = "#00aa66";
-  ctx.lineWidth = Math.max(2, image.width / 300);
-  ctx.beginPath();
-  page.outline.forEach((p, i) => {
-    if (i === 0) ctx.moveTo(p.x, p.y);
-    else ctx.lineTo(p.x, p.y);
-  });
-  ctx.closePath();
-  ctx.stroke();
-}
-
 function drawInspection() {
-  const stage = el("inspection-stage").value;
-  const raster =
-    stage === "page"
-      ? inspection?.page?.image
-      : stage === "rectified"
-        ? inspection?.rectified
-        : inspection?.gridImage;
+  const stages = {
+    original: image,
+    page: inspection?.page?.image,
+    rectified: inspection?.rectified,
+    grid: inspection?.gridImage,
+  };
+  const select = el("inspection-stage");
+  for (const option of select.options) {
+    option.disabled = !stages[option.value];
+    if (option.value === "grid")
+      option.textContent = recognition?.debug
+        ? "Detected cells and answers"
+        : "Configured cell positions";
+  }
+  if (!stages[select.value]) select.value = "original";
+  const stage = select.value;
+  const raster = stages[stage];
   el("debug-grid-panel").hidden = !raster;
   if (!raster) return;
   draw(output, raster);
@@ -118,25 +114,31 @@ function drawInspection() {
     });
   }
   el("stage-hint").textContent =
-    stage === "page"
-      ? "Original-resolution page crop. Boxes show matched references; labels show corner order and correlation score. The input preview shows the page boundary."
-      : stage === "rectified"
-        ? "Cropped between marker centers. The reference width is normalized to Corner size, so layout units stay fixed across crops and input resolutions."
-        : "Colored rectangles show configured cell bounds. They are not detected cells. Answer recognition and automatic orientation are not run.";
+    stage === "original"
+      ? "Uploaded image. Process the sheet to find markers and validate the configured cells."
+      : stage === "page"
+        ? "Original-resolution page crop. Boxes show matched references; labels show corner order and correlation score."
+        : stage === "rectified"
+          ? "Cropped between marker centers. The reference width is normalized to Corner size, so layout units stay fixed across crops and input resolutions."
+          : recognition
+            ? "Detected outlines: blue = blank, green = marked, orange = uncertain. Point at a cell to inspect the returned ink and fill measurements."
+            : "These rectangles show the configured cell positions on the rectified page. Edit the blocks to move or resize them, then process again to validate and read answers.";
 }
 
-function clearResults() {
-  inspection = null;
-  el("debug-grid-panel").hidden = true;
+function clearResults(geometry = null) {
+  inspection = geometry;
+  recognition = null;
+  el("cell-detail").textContent = "";
   el("results-notice").hidden = true;
   el("results").textContent =
-    "Load an image and click Rectify sheet to inspect its geometry.";
+    "Load an image and click Process sheet to inspect recognized answers.";
   el("copy-results-btn").disabled = true;
-  for (const option of el("inspection-stage").options) option.disabled = false;
-  drawInput();
+  el("inspection-stage").value = geometry ? "grid" : "original";
+  drawInspection();
 }
 
 function updateConfig() {
+  el("fill-value").textContent = el("fill-threshold").value;
   el("ncc-value").textContent = el("ncc-threshold").value;
   el("tolerance-value").textContent = el("color-tolerance").value;
   el("custom-marker-panel").hidden = el("corner-pattern").value !== "image";
@@ -154,12 +156,49 @@ function updateConfig() {
   }
 }
 
-function changed() {
+function changed(layoutOnly = false) {
+  const geometry = layoutOnly && inspection?.rectified ? inspection : null;
   updateConfig();
-  if (inspection) {
-    clearResults();
-    status("Settings changed. Rectify the sheet again to update the overlays.");
+  clearResults(geometry);
+  if (geometry) {
+    try {
+      const data = payload().data;
+      if (
+        data.answersBlocks.some(
+          (block) =>
+            Math.min(
+              block.startX,
+              block.startY,
+              block.gaps.columns,
+              block.gaps.rows,
+            ) < 0 || Math.min(block.width, block.height ?? block.width) <= 0,
+        ) ||
+        data.answersBlocks.reduce(
+          (count, block) => count + block.rows * block.columns,
+          0,
+        ) > 100_000
+      )
+        throw new Error(
+          "Use nonnegative positions/gaps, positive dimensions, and at most 100,000 cells.",
+        );
+      const grid = renderLayoutGrid(
+        geometry.rectified,
+        data,
+        geometry.scaleFactor,
+      );
+      inspection.gridImage = grid.image;
+      el("inspection-stage").value = "grid";
+      drawInspection();
+      if (grid.warnings.length) showNotice(grid.warnings.join("\n"));
+    } catch (error) {
+      // Invalid intermediate input must not leave an old grid looking current.
+      inspection.gridImage = null;
+      drawInspection();
+      showNotice(error.message, true);
+    }
   }
+  if (image)
+    status("Settings changed. Process the sheet again to update the results.");
 }
 
 function showMarker() {
@@ -175,8 +214,6 @@ function showMarker() {
 function setImage(value) {
   image = value;
   clearResults();
-  el("preview").hidden = false;
-  el("preview-empty").hidden = true;
   el("process-btn").disabled = false;
 }
 
@@ -184,11 +221,11 @@ function setBusy(value) {
   busy = value;
   document.body.classList.toggle("processing", value);
   for (const input of document.querySelectorAll(
-    ".controls input, .controls select, .controls button, .preview-actions button",
+    ".controls input, .controls select, .controls button",
   ))
     input.disabled = value;
   el("process-btn").disabled = value || !image;
-  el("process-btn").textContent = value ? "Rectifying…" : "Rectify sheet";
+  el("process-btn").textContent = value ? "Processing…" : "Process sheet";
   el("results-loader").hidden = !value;
   el("results").hidden = value;
 }
@@ -204,7 +241,7 @@ initSheetLayout(
   stored?.data && isValidStoredData(stored.data)
     ? dataToSheetState(stored.data)
     : defaultData(),
-  changed,
+  () => changed(true),
 );
 if (stored?.data && isValidStoredData(stored.data)) {
   el("corner-size").value = stored.data.cornerSize;
@@ -219,10 +256,15 @@ if (config) {
   if (config.page?.colorTolerance != null)
     el("color-tolerance").value = config.page.colorTolerance;
   if (config.aspectRatio != null) el("aspect-ratio").value = config.aspectRatio;
+  if (config.orientation != null)
+    el("orientation").value = config.orientation === "none" ? "none" : "auto";
+  if (config.fillThreshold != null)
+    el("fill-threshold").value = config.fillThreshold;
   if (config.rotation != null) el("rotation").value = String(config.rotation);
   if (config.nccThreshold != null)
     el("ncc-threshold").value = config.nccThreshold;
   el("use-worker").checked = Boolean(config.worker?.enabled);
+  el("debug").checked = Boolean(config.debug);
 }
 
 controls.addEventListener("input", (event) => {
@@ -237,10 +279,10 @@ el("add-block-btn").addEventListener("click", () => {
     defaultBlock(),
     el("blocks-list").children.length,
   );
-  changed();
+  changed(true);
 });
 el("inspection-stage").addEventListener("change", drawInspection);
-el("upload-preview-btn").addEventListener("click", () =>
+el("upload-image-btn").addEventListener("click", () =>
   el("file-input").click(),
 );
 el("upload-marker-btn").addEventListener("click", () =>
@@ -283,25 +325,6 @@ el("marker-file-input").addEventListener("change", async () => {
     setBusy(false);
   }
 });
-el("sample-preview-btn").addEventListener("click", () => {
-  try {
-    const { data, config } = payload();
-    resolveConfig(config);
-    setImage(
-      createSyntheticSheet(600, 800, data, buildSampleMarks(data), {
-        ...config,
-        shape: el("sample-shape").value,
-      }),
-    );
-    status(
-      "Sample generated with the current marker, page color, layout, and aspect ratio.",
-      "ok",
-    );
-  } catch (error) {
-    status(error.message, "err");
-  }
-});
-
 el("process-btn").addEventListener("click", async () => {
   if (!image || busy) return;
   let value;
@@ -314,57 +337,55 @@ el("process-btn").addEventListener("click", async () => {
   }
   clearResults();
   setBusy(true);
-  status("Detecting page and markers, then rectifying…");
+  status("Detecting page, markers, orientation, grid, and answers…");
   await new Promise((resolve) =>
     requestAnimationFrame(() => requestAnimationFrame(resolve)),
   );
   const started = performance.now();
   try {
-    inspection = await new OMR(value.data, value.config).rectify(
-      image.pixels,
-      image.width,
-      image.height,
-    );
-    drawInput(inspection.page);
+    // The example always needs inspection images; the checkbox controls JSON diagnostics.
+    recognition = await new OMR(value.data, {
+      ...value.config,
+      debug: true,
+    }).process(image.pixels, image.width, image.height);
+    inspection = recognition.debug;
+    if (inspection) el("inspection-stage").value = "grid";
     drawInspection();
     const elapsedMs = Math.round(performance.now() - started);
     el("results").textContent = JSON.stringify(
-      {
-        elapsedMs,
-        pageBounds: inspection.page.bounds,
-        markers: inspection.markers,
-        rectifiedSize: {
-          width: inspection.rectified.width,
-          height: inspection.rectified.height,
-        },
-        scaleFactor: inspection.scaleFactor,
-        logicalFrameSize: inspection.logicalSize,
-        normalizedReferenceWidth:
-          value.data.cornerSize * inspection.scaleFactor,
-        rotation: inspection.rotation,
-        warnings: inspection.warnings,
-      },
-      null,
+      recognition,
+      (key, entry) =>
+        (key === "debug" && !value.config.debug) ||
+        entry instanceof Uint8ClampedArray
+          ? undefined
+          : entry,
       2,
     );
     showNotice(
-      inspection.warnings.length
-        ? inspection.warnings.join("\n")
-        : "Geometry ready for inspection. Grid rectangles come from your configuration; answers have not been read.",
+      recognition.warnings.length
+        ? recognition.warnings.join("\n")
+        : "Answers recognized.",
     );
     el("copy-results-btn").disabled = false;
-    status(`Rectified in ${elapsedMs} ms`, "ok");
+    status(`Processed in ${elapsedMs} ms`, "ok");
   } catch (error) {
     if (error.page) {
-      inspection = { page: error.page };
-      el("inspection-stage").value = "page";
-      for (const option of el("inspection-stage").options)
-        option.disabled = option.value !== "page";
-      drawInput(error.page);
+      inspection = error.inspection ?? { page: error.page };
+      el("inspection-stage").value = error.inspection ? "grid" : "page";
       drawInspection();
     }
     el("results").textContent = JSON.stringify(
-      { stage: error.stage ?? "input", error: error.message },
+      {
+        stage: error.stage ?? "input",
+        error: error.message,
+        ...(value.config.debug && error.inspection
+          ? {
+              markers: error.inspection.markers,
+              logicalFrameSize: error.inspection.logicalSize,
+              warnings: error.inspection.warnings,
+            }
+          : {}),
+      },
       null,
       2,
     );
@@ -373,6 +394,26 @@ el("process-btn").addEventListener("click", async () => {
   } finally {
     setBusy(false);
   }
+});
+
+output.addEventListener("pointermove", (event) => {
+  if (!recognition?.debug || el("inspection-stage").value !== "grid") return;
+  const bounds = output.getBoundingClientRect();
+  const x = ((event.clientX - bounds.left) * output.width) / bounds.width;
+  const y = ((event.clientY - bounds.top) * output.height) / bounds.height;
+  let detail = "Point at a detected cell to inspect its measurements.";
+  for (const [bi, block] of recognition.debug.cells.entries())
+    for (const [ri, row] of block.entries())
+      for (const [ci, cell] of row.entries()) {
+        if (
+          x >= cell.x &&
+          x < cell.x + cell.width &&
+          y >= cell.y &&
+          y < cell.y + cell.height
+        )
+          detail = `Block ${bi + 1}, row ${ri + 1}, column ${ci + 1}: ${cell.status}\nInk ${(cell.inkRatio * 100).toFixed(1)}%, compensated fill ${(cell.fillRatio * 100).toFixed(1)}%, outline ${(cell.outlineScore * 100).toFixed(1)}%\nRow answers: ${JSON.stringify(recognition.answers[bi][ri])}`;
+      }
+  el("cell-detail").textContent = detail;
 });
 
 async function copy(text, button) {

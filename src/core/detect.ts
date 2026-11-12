@@ -1,9 +1,8 @@
-import type { ResolvedConfig } from "../config.js";
 import type { Data } from "../data.js";
 import { generateBullseyeTemplate } from "../patterns/bullseye.js";
 import { BULLSEYE_RADII } from "../patterns/bullseye-bitmap.js";
 import { prepareImageMarkerTemplate } from "../patterns/image-marker.js";
-import type { Corner, DetectedCorners, Marker, Point } from "../types.js";
+import type { Marker, Point } from "../types.js";
 import { type Component, connectedComponents } from "./components.js";
 
 export type MarkerCandidate = Marker & {
@@ -319,29 +318,5 @@ export function detectMarkers(
     referenceAspectRatio: reference.width / reference.height,
     ink: reference.ink,
     radii: reference.radii,
-  };
-}
-
-/** Legacy answer pipeline adapter; geometry-only processing uses detectMarkers directly. */
-export function detectCorners(
-  image: Float32Array,
-  width: number,
-  height: number,
-  data: Data,
-  config: ResolvedConfig,
-): DetectedCorners {
-  const { markers } = detectMarkers(
-    image,
-    width,
-    height,
-    data,
-    config.nccThreshold,
-  );
-  return {
-    corners: markers.map(
-      ({ x, y, size }): Corner => ({ x, y, size }),
-    ) as DetectedCorners["corners"],
-    scaleFactor:
-      markers.reduce((sum, p) => sum + p.size, 0) / (4 * data.cornerSize),
   };
 }

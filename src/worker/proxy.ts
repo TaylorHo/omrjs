@@ -32,7 +32,12 @@ function getWorker(url: string): Worker {
       else
         handler.reject(
           msg.stage
-            ? new RectificationError(msg.stage, msg.error, msg.page)
+            ? new RectificationError(
+                msg.stage,
+                msg.error,
+                msg.page,
+                msg.inspection,
+              )
             : new Error(msg.error),
         );
     };

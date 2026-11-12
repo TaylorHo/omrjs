@@ -10,7 +10,7 @@ npm install omrjs
 
 ## Quick start
 
-Define your sheet layout, pass image pixels, and read the marked answers. All processing options use library defaults:
+Define your sheet layout, set the marker-frame aspect ratio, and pass RGBA image pixels:
 
 ```js
 import { OMR } from "omrjs";
@@ -19,35 +19,47 @@ const data = {
   cornerSize: 100,
   answersBlocks: [
     {
-      startX: 200,
-      startY: 300,
-      rows: 10,
+      startX: 172,
+      startY: 336,
+      rows: 20,
       columns: 5,
-      width: 80,
-      gaps: { columns: 20, rows: 15 },
+      width: 50,
+      gaps: { columns: 21, rows: 30 },
     },
-  ],
+    {
+      startX: 990,
+      startY: 336,
+      rows: 20,
+      columns: 5,
+      width: 50,
+      gaps: { columns: 21, rows: 30 },
+    }
+  ]
 };
 
-const omr = new OMR(data);
+const omr = new OMR(data, { aspectRatio: 0.75 });
 
 const result = await omr.process(imagePixels, imageWidth, imageHeight);
 // result.answers[blockIndex][rowIndex] → checked values for that row
 ```
 
-With this default configuration, the algorithm will search for the [bullseye markers](https://github.com/TaylorHo/omrjs/blob/main/marker.png) in the four corners of the document. Make sure to add this marker to your document, or use a different one (see below for more information about how to set this up).
+Print four [bullseye markers](https://github.com/TaylorHo/omrjs/blob/main/marker.png) and circular or rectangular cell outlines, including blank cells. The layout above matches the JPEGs in `example/example-images/`; adjust it for your sheet. `aspectRatio` is the width / height **between marker centers**, not page edges.
+
+`result.answers[blockIndex][rowIndex]` contains all marked alternatives. Blank and uncertain cells are excluded; check `result.warnings` for required review. Set `debug: true` for measurements and images under `result.debug`.
+
+For geometry only, use `await omr.rectify(pixels, width, height)`; it returns the cropped page, markers, rectified image, and configured grid overlay without reading answers.
 
 ## Configuration reference
 
-The first argument to `OMR` (or the `data` argument to `process()`) describes the physical sheet layout. The optional second argument tunes detection and output behavior.
+The first argument to `OMR` (or the `data` argument to `process()`) describes the physical sheet layout. The second argument supplies `aspectRatio` and optional processing settings.
 
 ### Sheet layout (`Data`)
 
-All layout distances are expressed in the same unit system, scaled by `cornerSize`.
+All distances use `cornerSize` units. Block positions start at the rectified top-left marker center.
 
 | Option | Required | Default | Description |
 | --- | --- | --- | --- |
-| `cornerSize` | yes | — | Reference unit for the sheet. Every other distance (`startX`, `width`, gaps, etc.) is relative to this value. If `cornerSize` is `100` and a bubble `width` is `80`, the bubble is 80% of the corner marker width. |
+| `cornerSize` | yes | — | Full reference-image width, including white margins. Keep layout values unchanged when resizing the same sheet. |
 | `cornerPattern` | no | `"bullseye"` | Corner marker used to locate and warp the sheet. Use `"bullseye"` for the built-in pattern, or an `ImageMarker` object for a custom image. |
 | `answersBlocks` | yes | — | Array of answer regions on the sheet. Each block is a grid of bubbles to read. |
 
@@ -77,26 +89,19 @@ cornerPattern: {
 
 ### Processing options (`ProcessConfig`)
 
-Pass as the second argument to `OMR` or `process()`:
+Pass as the second argument to `OMR` or the fifth argument to `process()`:
 
 | Option | Default | Description |
 | --- | --- | --- |
-| `nccThreshold` | `0.5` | Normalized cross-correlation score (0–1) required to accept a corner match. Lower values are more permissive; higher values reduce false positives on noisy scans. |
-| `fillThreshold` | `0.5` | Ink fill ratio (0–1) above which a bubble is considered marked. Lower values detect lighter marks; higher values require darker fills. |
+| `aspectRatio` | required | Width / height between marker centers. Required by `process()` and `rectify()`. |
+| `page.backgroundColor` | `[255, 255, 255]` | Page RGB color used for cropping. |
+| `page.colorTolerance` | `0.15` | Page-color similarity tolerance (0–1). |
+| `rotation` | `0` | Clockwise rotation: `0`, `90`, `180`, or `270`. Used by `rectify()` or manual orientation. |
+| `nccThreshold` | `0.5` | Minimum marker correlation score (0–1). |
+| `fillThreshold` | `0.5` | Interior ink coverage after letter compensation. Cells within ±0.1 of this threshold are uncertain. |
 | `outputFormat` | `{ type: "letter" }` | Shape of values in `result.answers`. `"letter"` returns `"a"`, `"b"`, `"c"`, … per column. `"number"` returns `1`, `2`, `3`, … with optional `startAt: 0` for zero-based numbering. |
-| `debug` | `false` | When `true`, includes `result.debug` with detected corners, scale factor, and a rendered grid overlay image. |
-| `orientation` | `"portrait"` | Expected sheet orientation. `"portrait"` auto-rotates landscape photos to upright A4 and retries with a 180° flip when no answers are found. `"landscape"` skips the portrait correction. `"none"` disables all automatic rotation. |
-
-### Advanced processing (`improvements`)
-
-Nested under the config object for fine-grained image pipeline control:
-
-| Option | Default | Description |
-| --- | --- | --- |
-| `improvements.grayscale` | `"luminance"` | Method used to convert the input to grayscale before thresholding. `"luminance"` uses weighted RGB channels; `"average"` uses a simple mean. |
-| `improvements.exposureGamma` | `2.2` | Gamma correction applied to brighten underexposed scans before binarization. |
-| `improvements.detectionScales` | `[0.5, 1, 1.5, 2]` | Template scales tried when searching for corner markers. Wider ranges help with scans at unexpected resolutions. |
-| `improvements.cornerSearchMargin` | `0.2` | Fraction of image width/height used as the search window when locating corners 2–4 (after the first corner is found). |
+| `debug` | `false` | Include cell measurements, orientation decisions, markers, and inspection images in `result.debug`. |
+| `orientation` | `"auto"` | Match the printed grid at all four quarter turns. Use `"none"` with `rotation` for symmetric layouts. `"portrait"` and `"landscape"` remain aliases for auto. |
 
 ### Web Worker
 
@@ -114,33 +119,34 @@ import { OMR } from "omrjs";
 import workerUrl from "omrjs/worker?worker&url"; // Vite; see example/ for setup
 
 const data = {
-  cornerPattern: "bullseye",
   cornerSize: 100,
   answersBlocks: [
     {
-      startX: 200,
-      startY: 300,
-      rows: 10,
+      startX: 172,
+      startY: 336,
+      rows: 20,
       columns: 5,
-      width: 80,
-      height: 80,
-      gaps: { columns: 20, rows: 15 },
+      width: 50,
+      gaps: { columns: 21, rows: 30 },
     },
-  ],
+    {
+      startX: 990,
+      startY: 336,
+      rows: 20,
+      columns: 5,
+      width: 50,
+      gaps: { columns: 21, rows: 30 },
+    }
+  ]
 };
 
 const config = {
+  aspectRatio: 0.75,
   nccThreshold: 0.5,
   fillThreshold: 0.5,
   outputFormat: { type: "number", startAt: 1 },
   debug: true,
-  orientation: "portrait",
-  improvements: {
-    grayscale: "luminance",
-    exposureGamma: 2.2,
-    detectionScales: [0.5, 1, 1.5, 2],
-    cornerSearchMargin: 0.2,
-  },
+  orientation: "auto",
   worker: {
     enabled: true,
     url: workerUrl,
@@ -151,7 +157,7 @@ const omr = new OMR(data, config);
 const result = await omr.process(imagePixels, imageWidth, imageHeight);
 
 // result.answers[blockIndex][rowIndex] → Answer[]
-// result.orientation?.appliedRotation → 0 | 90 | 180 | 270
+// result.debug?.orientation.appliedRotation → 0 | 90 | 180 | 270
 // result.debug?.corners → detected corner positions (when debug: true)
 ```
 
@@ -170,12 +176,12 @@ This builds the library and starts a Vite dev server (opens at `http://localhost
 
 In the demo:
 
-1. Adjust the **sheet layout** — corner size, answer blocks, gaps, and corner pattern.
-2. Load a sheet image with **Upload image**, or click **Generate sample** to create a synthetic sheet.
-3. Tune **detection settings** (thresholds, orientation, debug mode) as needed.
-4. Click **Process sheet** to run OMR and inspect the JSON results. Enable debug mode to see detected corners and the answer grid.
+1. Set the sheet layout, page color, and marker-frame aspect ratio.
+2. Click **Upload Image** to preview your sheet, then **Process sheet**.
+3. Use **Inspect stage** to view the uploaded image, markers, rectified page, or extracted-answer overlay.
+4. Adjust blocks visually: configured bounds remain visible on failures and update as you edit. Process again to validate.
 
-Layout and config are saved in the browser's local storage between sessions.
+JSON output stays compact unless **Debug measurements in JSON output** is checked. Layout and settings are saved between sessions.
 
 ## Development
 
