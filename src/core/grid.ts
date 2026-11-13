@@ -32,7 +32,7 @@ function perimeter(
   return hits / 48;
 }
 
-export function detectGrid(image: RasterImage, data: Data, scale: number) {
+function prepareGrid(image: RasterImage, data: Data, scale: number) {
   if (!data.answersBlocks.length)
     throw new Error("Grid requires at least one answer block");
   const gray = toGrayscale(image.data, image.width, image.height, "luminance");
@@ -51,6 +51,15 @@ export function detectGrid(image: RasterImage, data: Data, scale: number) {
     image.width,
     image.height,
   );
+  return { gray, components, labels };
+}
+
+function matchGrid(
+  image: RasterImage,
+  data: Data,
+  scale: number,
+  { components, labels }: ReturnType<typeof prepareGrid>,
+) {
   const used = new Set<number>();
   let score = 0;
   const cells = data.answersBlocks.map((block, bi) => {
@@ -120,11 +129,12 @@ export function detectGrid(image: RasterImage, data: Data, scale: number) {
       v.sort((a, b) => a - b)[Math.floor(v.length / 2)]!;
     const dx = median(offsets.map((p) => p.x)),
       dy = median(offsets.map((p) => p.y));
+    // Component bounds round centers to half pixels; allow one pixel between two rounded centers.
     if (
       offsets.some(
         (p) =>
-          Math.abs(p.x - dx) > Math.max(2, w * 0.1) ||
-          Math.abs(p.y - dy) > Math.max(2, h * 0.1),
+          Math.abs(p.x - dx) > Math.max(2, w * 0.1 + 1) ||
+          Math.abs(p.y - dy) > Math.max(2, h * 0.1 + 1),
       )
     )
       throw new Error(
@@ -171,5 +181,28 @@ export function detectGrid(image: RasterImage, data: Data, scale: number) {
         "Printed grid has additional rows or columns near a configured block",
       );
   }
-  return { cells, gray, score: score / used.size };
+  return { cells, score: score / used.size };
+}
+
+export function detectGrid(image: RasterImage, data: Data, scale: number) {
+  const prepared = prepareGrid(image, data, scale);
+  return { ...matchGrid(image, data, scale, prepared), gray: prepared.gray };
+}
+
+/** Refine marker-derived scale only when the complete printed layout validates. */
+export function refineGridScale(image: RasterImage, data: Data, scale: number) {
+  const prepared = prepareGrid(image, data, scale);
+  for (let step = 0; step <= 60; step++) {
+    for (const direction of step === 0 ? [0] : [-1, 1]) {
+      // Limit correction to 15%; a quarter-percent step stays within the cell-spacing tolerance.
+      const candidate = scale * (1 + (direction * step) / 400);
+      try {
+        matchGrid(image, data, candidate, prepared);
+        return candidate;
+      } catch {
+        // Geometry-only inspection must remain available for incomplete or incompatible grids.
+      }
+    }
+  }
+  return scale;
 }

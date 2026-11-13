@@ -57,6 +57,8 @@ The first argument to `OMR` (or the `data` argument to `process()`) describes th
 
 All distances use `cornerSize` units. Block positions start at the rectified top-left marker center.
 
+Marker measurements provide the initial scale. When the complete printed grid validates within 15% of that scale, `rectify()` and `process()` refine it using the cell outlines and resample the original image. Incompatible or incomplete grids keep the marker-based geometry available for inspection.
+
 | Option          | Required | Default      | Description                                                                                                                                |
 | --------------- | -------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `cornerSize`    | yes      | —            | Full reference-image width, including white margins. Keep layout values unchanged when resizing the same sheet.                            |

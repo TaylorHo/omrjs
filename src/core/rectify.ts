@@ -10,6 +10,7 @@ import {
 import { calibrateFrame } from "./calibrate.js";
 import { renderLayoutGrid } from "./debug-render.js";
 import { detectMarkers } from "./detect.js";
+import { refineGridScale } from "./grid.js";
 import { detectPage } from "./page.js";
 import { adaptiveInkMask, preprocess } from "./preprocess.js";
 import { warpRgba } from "./warp.js";
@@ -207,12 +208,29 @@ export function rectifyPrepared(
       data.cornerSize,
       config.rotation,
     );
-    const warped = warpRgba(
+    let warped = warpRgba(
       image,
       calibration.corners,
       config.aspectRatio!,
       calibration.logicalWidth,
     );
+    if (data.answersBlocks.length) {
+      const refinedScale = refineGridScale(
+        warped.image,
+        data,
+        warped.scaleFactor,
+      );
+      if (refinedScale !== warped.scaleFactor) {
+        calibration.logicalWidth *= warped.scaleFactor / refinedScale;
+        // Sample the original pixels again, rather than enlarging an already rectified image.
+        warped = warpRgba(
+          image,
+          calibration.corners,
+          config.aspectRatio!,
+          calibration.logicalWidth,
+        );
+      }
+    }
     const horizontal: number[] = [],
       vertical: number[] = [];
     for (const marker of detection.markers) {
