@@ -1,6 +1,6 @@
 {
   "name": "omrjs",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Answer sheet parsing and data extraction using Optical Mark Recognition (OMR) in pure JavaScript",
   "type": "module",
   "main": "./dist/index.js",
