@@ -127,6 +127,10 @@ export function fitBullseye(
         ) / count,
       ) / width;
   }
-  // shortcut: pixel stair-steps can defeat ring fitting; use area calibration until higher-detail input supports the model.
-  return residual <= 0.0015 ? { x: center.x, y: center.y, width } : null;
+  // Allow a tenth of an input pixel so small markers do not fall back to exposure-sensitive ink area.
+  const tolerance = Math.min(
+    0.003,
+    Math.max(0.0015, 0.1 / Math.min(marker.width, marker.height)),
+  );
+  return residual <= tolerance ? { x: center.x, y: center.y, width } : null;
 }

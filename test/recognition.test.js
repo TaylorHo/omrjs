@@ -32,6 +32,58 @@ const expected = sampleMarks.map((b) =>
   b.map((row) => row.map((col) => "abcde"[col])),
 );
 
+it("keeps the camera layout stable across marker resolutions and tone curves", async () => {
+  const data = {
+    cornerPattern: "bullseye",
+    cornerSize: 100,
+    answersBlocks: [174, 990].map((startX) => ({
+      startX,
+      startY: 337.5,
+      rows: 20,
+      columns: 5,
+      width: 50,
+      gaps: { columns: 21, rows: 29.75 },
+    })),
+  };
+  const marks = data.answersBlocks.map((block) =>
+    Array.from({ length: block.rows }, (_, row) => [row % block.columns]),
+  );
+  const options = {
+    aspectRatio: 0.75,
+    page: { backgroundColor: [255, 255, 255], colorTolerance: 0.5 },
+    nccThreshold: 0.75,
+    fillThreshold: 0.6,
+    outputFormat: { type: "number", startAt: 0 },
+    debug: true,
+  };
+  for (const [width, height] of [
+    [480, 640],
+    [600, 800],
+    [1200, 1600],
+  ]) {
+    const sheet = createSyntheticSheet(width, height, data, marks);
+    for (const gamma of [1, 1.8]) {
+      const pixels = Uint8ClampedArray.from(sheet.pixels, (value, i) =>
+        i % 4 === 3 ? value : 255 * (value / 255) ** gamma,
+      );
+      const result = await read({ pixels, width, height }, data, options);
+      assert.deepEqual(result.answers, marks, `${width}px, gamma ${gamma}`);
+      assert.equal(result.debug.cells.flat(2).length, 200);
+      assert.ok(Math.abs(result.debug.logicalSize.width / 1600 - 1) < 0.005);
+      const response = await handleWorkerRequest({
+        id: width,
+        pixels,
+        width,
+        height,
+        data,
+        config: resolveConfig(options),
+      });
+      assert.equal(response.ok, true, response.error);
+      assert.deepEqual(response.result, result);
+    }
+  }
+});
+
 // User-reported frontend configuration: low-resolution markers used to skew the entire 20-row grid.
 const denseData = {
   cornerPattern: "bullseye",
