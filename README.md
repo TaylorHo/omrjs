@@ -1,5 +1,9 @@
 # omrjs
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/license/mit)
+![Release](https://img.shields.io/npm/v/omrjs)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24518473.svg)](https://doi.org/10.5281/zenodo.24518473)
+
 Answer sheet parsing and data extraction using Optical Mark Recognition (OMR) in pure JavaScript. Works in the browser and in Node.js, with no native dependencies.
 
 ## Install
