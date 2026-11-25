@@ -263,8 +263,8 @@ export function rectifyPrepared(
     const scaleFactor = warped.scaleFactor;
     const grid = renderLayoutGrid(warped.image, data, scaleFactor);
     const warnings = [...grid.warnings];
-    const sx = horizontal.reduce((a, b) => a + b) / 4,
-      sy = vertical.reduce((a, b) => a + b) / 4;
+    const sx = horizontal.reduce((a, b) => a + b, 0) / 4,
+      sy = vertical.reduce((a, b) => a + b, 0) / 4;
     if (Math.max(sx, sy) / Math.min(sx, sy) > 1.15)
       warnings.push(
         "Rectified marker proportions disagree; check the marker-frame aspect ratio or reference image.",

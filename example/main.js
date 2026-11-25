@@ -282,12 +282,6 @@ el("add-block-btn").addEventListener("click", () => {
   changed(true);
 });
 el("inspection-stage").addEventListener("change", drawInspection);
-el("upload-image-btn").addEventListener("click", () =>
-  el("file-input").click(),
-);
-el("upload-marker-btn").addEventListener("click", () =>
-  el("marker-file-input").click(),
-);
 el("clear-marker-btn").addEventListener("click", () => {
   customMarker = null;
   showMarker();

@@ -214,7 +214,8 @@ input[type="range"] {
   accent-color: var(--accent);
 }
 
-button {
+button,
+label.file-input-trigger {
   width: 100%;
   padding: 0.65rem 0.85rem;
   border: 1px solid var(--border);
@@ -225,7 +226,13 @@ button {
   font: inherit;
 }
 
-button.small {
+label.file-input-trigger {
+  display: inline-block;
+  text-align: center;
+}
+
+button.small,
+label.file-input-trigger.small {
   width: auto;
   padding: 0.35rem 0.75rem;
   font-size: 0.8125rem;
@@ -236,10 +243,6 @@ button.wide {
   margin-bottom: 1rem;
 }
 
-button:hover:not(:disabled) {
-  border-color: var(--accent);
-}
-
 button.primary {
   margin-top: 0.5rem;
   background: var(--accent);
@@ -248,14 +251,19 @@ button.primary {
   font-weight: 600;
 }
 
-button.primary:hover:not(:disabled) {
-  background: var(--accent-hover);
-  border-color: var(--accent-hover);
-}
-
 button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+button:hover:not(:disabled),
+label.file-input-trigger:hover {
+  border-color: var(--accent);
+}
+
+button.primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
 }
 
 #blocks-list {

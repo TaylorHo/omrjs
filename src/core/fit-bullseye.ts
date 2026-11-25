@@ -12,7 +12,7 @@ function sample(
   const px = p.x - 0.5,
     py = p.y - 0.5;
   if (px < 0 || py < 0 || px >= image.width - 1 || py >= image.height - 1)
-    return NaN;
+    return Number.NaN;
   const x0 = Math.floor(px),
     y0 = Math.floor(py),
     fx = px - x0,

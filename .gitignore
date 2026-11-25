@@ -5,3 +5,4 @@ example/dist/
 *.tsbuildinfo
 *.tgz
 *.log
+.scannerwork
